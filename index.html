@@ -119,11 +119,16 @@ input[type="text"], input[type="number"], select {
     outline: none;
 }
 
-/* BLINKING LISTEN BUTTON */
+/* BLINKING ANIMATION */
 .btn-blink {
     background: #ec4899;
     animation: blinker 1s linear infinite;
     font-weight: bold;
+}
+.icon-blink {
+    animation: blinker 0.6s linear infinite;
+    background: #facc15 !important;
+    color: #0f172a !important;
 }
 @keyframes blinker {
     50% { opacity: 0.3; }
@@ -173,7 +178,7 @@ button {
     color: white;
     transition: opacity 0.2s;
 }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
+button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
 .btn-green { background: #22c55e; }
 .btn-blue { background: #3b82f6; }
 .btn-orange { background: #f59e0b; }
@@ -239,7 +244,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     font-weight: bold;
 }
 
-/* LEVEL 2: SERIAL NUMBER CARDS WITH MIC BUTTONS */
+/* LEVEL 2: SERIAL NUMBER CARDS */
 .stt-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -271,8 +276,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         <span class="marquee-text">Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!</span>
     </div>
     <div class="toolbar-controls">
-        <button class="toolbar-btn btn-green" onclick="playToolbarWelcome()">🔊 Check TTS!</button>
-        <button class="toolbar-btn btn-blue" onclick="startToolbarSTT()">🎙️ Check Mic!</button>
+        <button class="toolbar-btn btn-green" id="ttsToggleBtn" onclick="toggleToolbarTTS()">🔊 Check TTS!</button>
+        <button class="toolbar-btn btn-blue" id="micToggleBtn" onclick="toggleToolbarMic()">🎙️ Check Mic!</button>
         <div class="user-said-box" id="userSaidDisplay">You said: ...</div>
     </div>
 </div>
@@ -295,17 +300,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         </div>
     </div>
 
-    <!-- GAME CONTROL BAR WITH SCORE & PERCENTAGE -->
+    <!-- GAME CONTROL BAR -->
     <div class="game-bar">
         <div class="stats-display">
             <div class="timer-display" id="timer">00:00</div>
             <div class="score-display" id="scoreDisplay">Score: 0/20 (0%)</div>
         </div>
         <div class="btn-group">
-            <button class="btn-blink" id="listenBtn" onclick="listen3Times()">🎧 Listen (3 Times)</button>
-            <button class="btn-green" id="startBtn" onclick="startGame()">▶️ Start Game</button>
-            <button class="btn-orange" id="resetBtn" onclick="resetGame()">🔄 Reset</button>
+            <button class="btn-blink" id="listenBtn" onclick="listen3RoundsSequence()">🎧 Listen (3 Rounds)</button>
+            <button class="btn-green" id="startBtn" onclick="startGame()" disabled>▶️ Start Game</button>
             <button class="btn-blue" id="submitBtn" onclick="submitData()" disabled>📤 Submit Results</button>
+            <button class="btn-orange" id="resetBtn" onclick="resetSameUser()" disabled>🔄 Reset</button>
         </div>
     </div>
 
@@ -314,11 +319,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     <p style="color: #94a3b8; font-size: 0.95rem;">Tap any speaker icon to hear the audio clip, then drag icons into the numbered drop slots (1 to 10).</p>
     
     <div class="source-pool" id="sourcePool">
-        <!-- Shuffled Speaker Icons Inserted Here -->
+        <!-- Speaker Icons Inserted Here -->
     </div>
 
     <div class="drop-zones-grid" id="dropZonesGrid">
-        <!-- 10 Dedicated Drop Slots -->
+        <!-- 10 Drop Slots -->
     </div>
 
     <!-- LEVEL 2: VOICE EVALUATION -->
@@ -339,6 +344,9 @@ let secondsElapsed = 0;
 let gameActive = false;
 let ttsAudio = null;
 let ttsId = 0;
+let isTTSSpeaking = false;
+let isMicListening = false;
+
 let level1Score = 0;
 let level2Score = 0;
 let verifiedL2Words = new Set();
@@ -349,26 +357,107 @@ let recognition = null;
 let draggedCard = null;
 let boxTimerInterval = null;
 
-// Pre-Game Listen 3 Times Loop
-async function listen3Times() {
+// TOP TOOLBAR TOGGLE FUNCTIONS
+function toggleToolbarTTS() {
+    const ttsBtn = document.getElementById("ttsToggleBtn");
+    if (!isTTSSpeaking) {
+        isTTSSpeaking = true;
+        ttsBtn.textContent = "🔇 Stop TTS!";
+        ttsBtn.className = "toolbar-btn btn-red";
+        speakText("Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!", () => {
+            isTTSSpeaking = false;
+            ttsBtn.textContent = "🔊 Check TTS!";
+            ttsBtn.className = "toolbar-btn btn-green";
+        });
+    } else {
+        stopSmartTTS();
+        isTTSSpeaking = false;
+        ttsBtn.textContent = "🔊 Check TTS!";
+        ttsBtn.className = "toolbar-btn btn-green";
+    }
+}
+
+function toggleToolbarMic() {
+    const micBtn = document.getElementById("micToggleBtn");
+    if (!SpeechRecognition) {
+        alert("Speech Recognition not supported on this browser.");
+        return;
+    }
+
+    if (!isMicListening) {
+        try {
+            if (recognition) recognition.abort();
+            recognition = new SpeechRecognition();
+            recognition.lang = "en-IN";
+            
+            isMicListening = true;
+            micBtn.textContent = "⏹️ Stop Mic!";
+            micBtn.className = "toolbar-btn btn-red";
+            document.getElementById("userSaidDisplay").textContent = "You said: Listening...";
+
+            recognition.onresult = (event) => {
+                const spoken = event.results[0][0].transcript.trim();
+                document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
+                stopToolbarMicState();
+            };
+
+            recognition.onerror = () => stopToolbarMicState();
+            recognition.onend = () => stopToolbarMicState();
+
+            recognition.start();
+        } catch(err) {
+            stopToolbarMicState();
+        }
+    } else {
+        if (recognition) try { recognition.abort(); } catch(e){}
+        stopToolbarMicState();
+    }
+}
+
+function stopToolbarMicState() {
+    isMicListening = false;
+    const micBtn = document.getElementById("micToggleBtn");
+    micBtn.textContent = "🎙️ Check Mic!";
+    micBtn.className = "toolbar-btn btn-blue";
+}
+
+// 3 ROUNDS SEQUENTIAL LISTEN WITH BLINKING SPEAKERS
+async function listen3RoundsSequence() {
+    const name = document.getElementById("userName").value.trim();
+    if (!name) {
+        alert("Please enter Student Name before listening!");
+        return;
+    }
+
     const listenBtn = document.getElementById("listenBtn");
     listenBtn.disabled = true;
+    listenBtn.classList.remove("btn-blink");
+
+    const cards = document.querySelectorAll(".icon-only-card");
+
     for (let round = 1; round <= 3; round++) {
-        for (let word of targetWords) {
+        for (let i = 0; i < targetWords.length; i++) {
+            const word = targetWords[i];
+            const card = cards[i];
+
+            if (card) card.classList.add("icon-blink");
             await speakTextAsync(word);
+            if (card) card.classList.remove("icon-blink");
         }
     }
-    listenBtn.disabled = false;
+
+    // Enable Start Button after 3 rounds complete
+    document.getElementById("startBtn").disabled = false;
 }
 
 function speakTextAsync(text) {
     return new Promise((resolve) => {
-        speakText(text);
+        speakText(text, () => resolve());
         setTimeout(() => resolve(), 1200);
     });
 }
 
-// Initialize Game Slots
+// GAME INITIALIZATION
 function initGame() {
     const sourcePool = document.getElementById("sourcePool");
     const dropZonesGrid = document.getElementById("dropZonesGrid");
@@ -376,7 +465,7 @@ function initGame() {
     dropZonesGrid.innerHTML = "";
     verifiedL2Words.clear();
 
-    // Create 10 Drop Slots for Level 1
+    // 10 Drop Slots for Level 1
     for (let i = 1; i <= 10; i++) {
         const slot = document.createElement("div");
         slot.className = "drop-slot";
@@ -395,7 +484,7 @@ function initGame() {
         slot.addEventListener("drop", (e) => {
             e.preventDefault();
             slot.classList.remove("drag-over");
-            if (draggedCard) {
+            if (draggedCard && gameActive) {
                 const existingCard = slot.querySelector(".icon-only-card");
                 if (existingCard) {
                     sourcePool.appendChild(existingCard);
@@ -408,23 +497,22 @@ function initGame() {
         dropZonesGrid.appendChild(slot);
     }
 
-    // Level 1 Shuffled Speaker-Only Icons
-    const shuffled = [...targetWords].map((word) => ({ word, id: Math.random() })).sort(() => Math.random() - 0.5);
-    shuffled.forEach((item) => {
+    // Level 1 Source Pool Icons
+    targetWords.forEach((word) => {
         const card = document.createElement("div");
         card.className = "icon-only-card";
         card.draggable = true;
-        card.dataset.word = item.word;
+        card.dataset.word = word;
         card.innerHTML = `🔊`;
         
-        card.addEventListener("click", () => speakText(item.word));
+        card.addEventListener("click", () => speakText(word));
         card.addEventListener("dragstart", () => { draggedCard = card; });
         card.addEventListener("dragend", () => { draggedCard = null; });
 
         sourcePool.appendChild(card);
     });
 
-    // Level 2 Cards with Individual Mic Buttons
+    // Level 2 STT Cards
     const sttGrid = document.getElementById("sttGrid");
     sttGrid.innerHTML = "";
     targetWords.forEach((word, index) => {
@@ -445,6 +533,13 @@ function initGame() {
     updateScoreDisplay();
 }
 
+function shuffleSourcePool() {
+    const sourcePool = document.getElementById("sourcePool");
+    const cards = Array.from(sourcePool.children);
+    cards.sort(() => Math.random() - 0.5);
+    cards.forEach(card => sourcePool.appendChild(card));
+}
+
 function evaluateLevel1() {
     level1Score = 0;
     for (let i = 1; i <= 10; i++) {
@@ -463,22 +558,21 @@ function updateScoreDisplay() {
     document.getElementById("scoreDisplay").textContent = `Score: ${totalScore}/20 (${percentage}%)`;
 }
 
-// TIMER & GAME CONTROLS
+// TIMER & START GAME
 function startGame() {
     if (gameActive) return;
-    const name = document.getElementById("userName").value.trim();
-    if (!name) {
-        alert("Please enter Student Name before starting!");
-        return;
-    }
     gameActive = true;
     secondsElapsed = 0;
     level1Score = 0;
     level2Score = 0;
     verifiedL2Words.clear();
+
+    shuffleSourcePool();
+
     document.getElementById("startBtn").disabled = true;
     document.getElementById("submitBtn").disabled = false;
-    
+    document.getElementById("resetBtn").disabled = true;
+
     timerInterval = setInterval(() => {
         secondsElapsed++;
         const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, "0");
@@ -487,8 +581,12 @@ function startGame() {
     }, 1000);
 }
 
-// LEVEL 2 TIMED SPEECH RECOGNITION FOR INDIVIDUAL BOXES
+// LEVEL 2 SPEECH BOX EVALUATION
 function testSpeechBox(targetWord, serialNum) {
+    if (!gameActive) {
+        alert("Please press Start Game first!");
+        return;
+    }
     if (!SpeechRecognition) {
         alert("Speech Recognition not supported on this browser.");
         return;
@@ -548,76 +646,7 @@ function testSpeechBox(targetWord, serialNum) {
     }, 1000);
 }
 
-function resetGame() {
-    clearInterval(timerInterval);
-    if (boxTimerInterval) clearInterval(boxTimerInterval);
-    if (recognition) try { recognition.abort(); } catch(e){}
-    secondsElapsed = 0;
-    gameActive = false;
-    level1Score = 0;
-    level2Score = 0;
-    verifiedL2Words.clear();
-    document.getElementById("timer").textContent = "00:00";
-    document.getElementById("startBtn").disabled = false;
-    document.getElementById("listenBtn").disabled = false;
-    document.getElementById("submitBtn").disabled = true;
-    document.getElementById("userSaidDisplay").textContent = "You said: ...";
-    initGame();
-}
-
-// TOP TOOLBAR TTS & STT
-function playToolbarWelcome() {
-    speakText("Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!");
-}
-
-function startToolbarSTT() {
-    if (!SpeechRecognition) {
-        alert("Speech Recognition not supported on this browser.");
-        return;
-    }
-    try {
-        if (recognition) recognition.abort();
-        recognition = new SpeechRecognition();
-        recognition.lang = "en-IN";
-        document.getElementById("userSaidDisplay").textContent = "You said: Listening...";
-        
-        recognition.onresult = (event) => {
-            const spoken = event.results[0][0].transcript.trim();
-            document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
-        };
-        recognition.start();
-    } catch(err){}
-}
-
-// TTS ENGINE
-function speakText(text) {
-    stopSmartTTS();
-    const currentId = ++ttsId;
-    const audioUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=en&client=tw-ob";
-    ttsAudio = new Audio(audioUrl);
-    ttsAudio.play().catch(() => fallbackBrowserTTS(text, currentId));
-}
-
-function fallbackBrowserTTS(text, currentId) {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-IN";
-    window.speechSynthesis.speak(utterance);
-}
-
-function stopSmartTTS() {
-    ttsId++;
-    if (ttsAudio) {
-        try { ttsAudio.pause(); ttsAudio.currentTime = 0; } catch(e) {}
-        ttsAudio = null;
-    }
-    if ("speechSynthesis" in window) {
-        try { window.speechSynthesis.cancel(); } catch(e) {}
-    }
-}
-
-// GOOGLE SHEET SUBMISSION ENDPOINT
+// SUBMIT DATA & ENABLE RESET
 function submitData() {
     const name = document.getElementById("userName").value.trim();
     const emis = document.getElementById("userEMIS").value.trim();
@@ -631,8 +660,14 @@ function submitData() {
         return;
     }
 
+    // Stop Timers and Scoring
     clearInterval(timerInterval);
     if (boxTimerInterval) clearInterval(boxTimerInterval);
+    gameActive = false;
+
+    // Enable Reset button for same user replay
+    document.getElementById("submitBtn").disabled = true;
+    document.getElementById("resetBtn").disabled = false;
 
     // Apps Script Endpoint targeting Google Sheet ID: 1wvXXEzZkSj0MiaPHsjgbZATWEBuPUi3zUynB8yJmrPk
     const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
@@ -657,6 +692,65 @@ function submitData() {
     }).catch(() => {
         alert(`Submitted!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
     });
+}
+
+// RESET FOR SAME USER REPLAY
+function resetSameUser() {
+    clearInterval(timerInterval);
+    if (boxTimerInterval) clearInterval(boxTimerInterval);
+    if (recognition) try { recognition.abort(); } catch(e){}
+    
+    secondsElapsed = 0;
+    gameActive = false;
+    level1Score = 0;
+    level2Score = 0;
+    verifiedL2Words.clear();
+
+    document.getElementById("timer").textContent = "00:00";
+    document.getElementById("scoreDisplay").textContent = "Score: 0/20 (0%)";
+    document.getElementById("userSaidDisplay").textContent = "You said: ...";
+
+    document.getElementById("listenBtn").disabled = false;
+    document.getElementById("listenBtn").classList.add("btn-blink");
+    document.getElementById("startBtn").disabled = true;
+    document.getElementById("submitBtn").disabled = true;
+    document.getElementById("resetBtn").disabled = true;
+
+    initGame();
+}
+
+// PROVEN TTS ENGINE
+function speakText(text, onComplete) {
+    stopSmartTTS();
+    const currentId = ++ttsId;
+    const audioUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=en&client=tw-ob";
+    ttsAudio = new Audio(audioUrl);
+    
+    ttsAudio.onended = () => { if (onComplete) onComplete(); };
+    ttsAudio.onerror = () => { fallbackBrowserTTS(text, onComplete); };
+    
+    ttsAudio.play().catch(() => fallbackBrowserTTS(text, onComplete));
+}
+
+function fallbackBrowserTTS(text, onComplete) {
+    if (!("speechSynthesis" in window)) { if (onComplete) onComplete(); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    utterance.onend = () => { if (onComplete) onComplete(); };
+    utterance.onerror = () => { if (onComplete) onComplete(); };
+    window.speechSynthesis.speak(utterance);
+}
+
+function stopSmartTTS() {
+    ttsId++;
+    if (ttsAudio) {
+        try { ttsAudio.pause(); ttsAudio.currentTime = 0; } catch(e) {}
+        ttsAudio = null;
+    }
+    if ("speechSynthesis" in window) {
+        try { window.speechSynthesis.cancel(); } catch(e) {}
+    }
 }
 
 // Initialize on page load
