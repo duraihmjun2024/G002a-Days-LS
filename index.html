@@ -179,7 +179,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-orange { background: #f59e0b; }
 .btn-red { background: #ef4444; }
 
-/* LEVEL 1: SINGLE-LINE SPEAKER ICON CARDS & DROP SLOTS */
+/* LEVEL 1: SPEAKER ICON CARDS & DROP SLOTS */
 .source-pool {
     display: flex;
     flex-wrap: nowrap;
@@ -205,7 +205,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     align-items: center;
     justify-content: center;
     user-select: none;
-    transition: transform 0.15s;
     flex-shrink: 0;
 }
 .icon-only-card:active { cursor: grabbing; transform: scale(0.95); }
@@ -240,7 +239,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     font-weight: bold;
 }
 
-/* LEVEL 2: TIMED SERIAL NUMBER CARDS */
+/* LEVEL 2: SERIAL NUMBER CARDS WITH MIC BUTTONS */
 .stt-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -259,9 +258,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     background: #1e293b;
 }
 .stt-serial { font-weight: bold; color: #38bdf8; font-size: 1.2rem; }
-.stt-user-speech { font-size: 0.9rem; color: #facc15; margin-top: 4px; font-weight: 500; min-height: 20px; }
+.stt-user-speech { font-size: 0.85rem; color: #facc15; margin-top: 4px; font-weight: 500; min-height: 20px; }
 .stt-status { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
-.box-timer { font-size: 0.8rem; color: #ef4444; font-weight: bold; }
+.box-timer { font-size: 0.8rem; color: #ef4444; font-weight: bold; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -322,9 +321,9 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         <!-- 10 Dedicated Drop Slots -->
     </div>
 
-    <!-- LEVEL 2: VOICE EVALUATION (5 SECONDS AUTO-ADVANCE) -->
-    <h2>Level 2: Speak All 10 Words (5s per Box)</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Each box gives 5 seconds to pronounce the target word clearly before advancing.</p>
+    <!-- LEVEL 2: VOICE EVALUATION -->
+    <h2>Level 2: Speak All 10 Words</h2>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Tap the mic button on each item number and pronounce the corresponding word clearly within 5 seconds.</p>
     <div class="stt-grid" id="sttGrid">
         <!-- Serial Number STT Cards Inserted Here -->
     </div>
@@ -342,12 +341,12 @@ let ttsAudio = null;
 let ttsId = 0;
 let level1Score = 0;
 let level2Score = 0;
+let verifiedL2Words = new Set();
 
 // Speech Recognition
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let draggedCard = null;
-let currentL2Index = 0;
 let boxTimerInterval = null;
 
 // Pre-Game Listen 3 Times Loop
@@ -375,6 +374,7 @@ function initGame() {
     const dropZonesGrid = document.getElementById("dropZonesGrid");
     sourcePool.innerHTML = "";
     dropZonesGrid.innerHTML = "";
+    verifiedL2Words.clear();
 
     // Create 10 Drop Slots for Level 1
     for (let i = 1; i <= 10; i++) {
@@ -395,7 +395,7 @@ function initGame() {
         slot.addEventListener("drop", (e) => {
             e.preventDefault();
             slot.classList.remove("drag-over");
-            if (draggedCard && gameActive) {
+            if (draggedCard) {
                 const existingCard = slot.querySelector(".icon-only-card");
                 if (existingCard) {
                     sourcePool.appendChild(existingCard);
@@ -424,7 +424,7 @@ function initGame() {
         sourcePool.appendChild(card);
     });
 
-    // Level 2 Cards
+    // Level 2 Cards with Individual Mic Buttons
     const sttGrid = document.getElementById("sttGrid");
     sttGrid.innerHTML = "";
     targetWords.forEach((word, index) => {
@@ -434,6 +434,7 @@ function initGame() {
         card.id = `stt-card-${serialNum}`;
         card.innerHTML = `
             <div class="stt-serial">Word #${serialNum}</div>
+            <button class="btn-green" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechBox('${word}', ${serialNum})">🎙️ Speak</button>
             <div class="stt-user-speech" id="stt-speech-${serialNum}">You said: --</div>
             <div class="stt-status" id="stt-status-${serialNum}">Pending</div>
             <div class="box-timer" id="box-timer-${serialNum}"></div>
@@ -474,8 +475,8 @@ function startGame() {
     secondsElapsed = 0;
     level1Score = 0;
     level2Score = 0;
+    verifiedL2Words.clear();
     document.getElementById("startBtn").disabled = true;
-    document.getElementById("listenBtn").disabled = true;
     document.getElementById("submitBtn").disabled = false;
     
     timerInterval = setInterval(() => {
@@ -484,20 +485,17 @@ function startGame() {
         const secs = String(secondsElapsed % 60).padStart(2, "0");
         document.getElementById("timer").textContent = `${mins}:${secs}`;
     }, 1000);
-
-    // Start Level 2 Timed Sequence
-    currentL2Index = 0;
-    processNextL2Box();
 }
 
-function processNextL2Box() {
-    if (currentL2Index >= 10) {
-        document.getElementById("userSaidDisplay").textContent = "You said: Level 2 Finished!";
+// LEVEL 2 TIMED SPEECH RECOGNITION FOR INDIVIDUAL BOXES
+function testSpeechBox(targetWord, serialNum) {
+    if (!SpeechRecognition) {
+        alert("Speech Recognition not supported on this browser.");
         return;
     }
 
-    const serialNum = currentL2Index + 1;
-    const targetWord = targetWords[currentL2Index];
+    if (boxTimerInterval) clearInterval(boxTimerInterval);
+
     const card = document.getElementById(`stt-card-${serialNum}`);
     const speechDiv = document.getElementById(`stt-speech-${serialNum}`);
     const statusDiv = document.getElementById(`stt-status-${serialNum}`);
@@ -510,31 +508,33 @@ function processNextL2Box() {
     let timeLeft = 5;
     timerDiv.textContent = `⏱️ ${timeLeft}s`;
 
-    if (SpeechRecognition) {
-        try {
-            if (recognition) recognition.abort();
-            recognition = new SpeechRecognition();
-            recognition.lang = "en-IN";
-            recognition.interimResults = false;
+    try {
+        if (recognition) recognition.abort();
+        recognition = new SpeechRecognition();
+        recognition.lang = "en-IN";
+        recognition.interimResults = false;
 
-            recognition.onresult = (event) => {
-                const spoken = event.results[0][0].transcript.trim();
-                document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
-                speechDiv.textContent = `You said: "${spoken}"`;
+        recognition.onresult = (event) => {
+            const spoken = event.results[0][0].transcript.trim();
+            document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
+            speechDiv.textContent = `You said: "${spoken}"`;
 
-                if (spoken.toLowerCase().includes(targetWord.toLowerCase())) {
-                    statusDiv.textContent = "✓ Correct (+1)";
-                    statusDiv.style.color = "#22c55e";
+            if (spoken.toLowerCase().includes(targetWord.toLowerCase())) {
+                statusDiv.textContent = "✓ Correct (+1)";
+                statusDiv.style.color = "#22c55e";
+                if (!verifiedL2Words.has(serialNum)) {
+                    verifiedL2Words.add(serialNum);
                     level2Score += 1;
                     updateScoreDisplay();
-                } else {
-                    statusDiv.textContent = "❌ Incorrect";
-                    statusDiv.style.color = "#ef4444";
                 }
-            };
-            recognition.start();
-        } catch(e){}
-    }
+            } else {
+                statusDiv.textContent = `Heard: "${spoken}"`;
+                statusDiv.style.color = "#ef4444";
+            }
+        };
+
+        recognition.start();
+    } catch(e) {}
 
     boxTimerInterval = setInterval(() => {
         timeLeft--;
@@ -544,20 +544,19 @@ function processNextL2Box() {
             if (recognition) try { recognition.stop(); } catch(e){}
             card.classList.remove("active-box");
             timerDiv.textContent = "";
-            currentL2Index++;
-            processNextL2Box();
         }
     }, 1000);
 }
 
 function resetGame() {
     clearInterval(timerInterval);
-    clearInterval(boxTimerInterval);
+    if (boxTimerInterval) clearInterval(boxTimerInterval);
     if (recognition) try { recognition.abort(); } catch(e){}
     secondsElapsed = 0;
     gameActive = false;
     level1Score = 0;
     level2Score = 0;
+    verifiedL2Words.clear();
     document.getElementById("timer").textContent = "00:00";
     document.getElementById("startBtn").disabled = false;
     document.getElementById("listenBtn").disabled = false;
@@ -633,7 +632,7 @@ function submitData() {
     }
 
     clearInterval(timerInterval);
-    clearInterval(boxTimerInterval);
+    if (boxTimerInterval) clearInterval(boxTimerInterval);
 
     // Apps Script Endpoint targeting Google Sheet ID: 1wvXXEzZkSj0MiaPHsjgbZATWEBuPUi3zUynB8yJmrPk
     const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
