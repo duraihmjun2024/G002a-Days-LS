@@ -167,6 +167,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     font-weight: bold;
     color: #f8fafc;
     user-select: none;
+    transition: transform 0.15s, background 0.15s;
+}
+.sort-card.dragging {
+    opacity: 0.5;
+    background: #38bdf8;
 }
 .sort-card button {
     padding: 4px 8px;
@@ -205,11 +210,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 <!-- SINGLE LINE TOP TOOLBAR -->
 <div class="top-toolbar">
     <div class="marquee-container">
-        <span class="marquee-text">Panchayat Union Primary School, Anjalam Melur-621 208 Welcomes You!</span>
+        <span class="marquee-text">Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!</span>
     </div>
     <div class="toolbar-controls">
-        <button class="toolbar-btn btn-green" onclick="playToolbarWelcome()">🔊 Speak Welcome</button>
-        <button class="toolbar-btn btn-blue" onclick="startToolbarSTT()">🎙️ Quick Voice</button>
+        <button class="toolbar-btn btn-green" onclick="playToolbarWelcome()">🔊 Check TTS!</button>
+        <button class="toolbar-btn btn-blue" onclick="startToolbarSTT()">🎙️ Check Mic!</button>
         <button class="toolbar-btn btn-red" onclick="stopSmartTTS()">🔇 Stop</button>
     </div>
 </div>
@@ -246,7 +251,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
     <!-- LEVEL 1: LISTENING & SORTING -->
     <h2>Level 1: Listen &amp; Sort Days of the Week</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Tap audio buttons to hear each word, then reorder them into correct sequence.</p>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Tap audio buttons to hear each word, then drag/reorder them into correct sequence.</p>
     <div class="sort-container" id="sortContainer">
         <!-- Dynamic Cards Inserted Here -->
     </div>
@@ -273,12 +278,26 @@ let ttsId = 0;
 // Speech Recognition Initialization
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
+let draggedCard = null;
 
 // Initialize Level 1 Cards & Level 2 STT
 function initGame() {
     const sortContainer = document.getElementById("sortContainer");
     sortContainer.innerHTML = "";
     
+    // Setup Drag-and-Drop Container Handlers
+    sortContainer.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        const afterElement = getDragAfterElement(sortContainer, e.clientX);
+        if (draggedCard) {
+            if (afterElement == null) {
+                sortContainer.appendChild(draggedCard);
+            } else {
+                sortContainer.insertBefore(draggedCard, afterElement);
+            }
+        }
+    });
+
     // Shuffled copy for sorting
     const shuffled = [...targetWords].sort(() => Math.random() - 0.5);
     shuffled.forEach((word) => {
@@ -288,8 +307,17 @@ function initGame() {
         card.dataset.word = word;
         card.innerHTML = `<span>${word}</span> <button class="btn-blue" onclick="speakText('${word}')">🔊</button>`;
         
-        // Basic drag event listeners
-        card.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", word));
+        // Drag Event Handlers
+        card.addEventListener("dragstart", () => {
+            draggedCard = card;
+            card.classList.add("dragging");
+        });
+
+        card.addEventListener("dragend", () => {
+            draggedCard = null;
+            card.classList.remove("dragging");
+        });
+
         sortContainer.appendChild(card);
     });
 
@@ -307,6 +335,19 @@ function initGame() {
         `;
         sttGrid.appendChild(card);
     });
+}
+
+function getDragAfterElement(container, x) {
+    const draggableElements = [...container.querySelectorAll('.sort-card:not(.dragging)')];
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = x - box.left - box.width / 2;
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
 // TIMER FUNCTIONS
@@ -342,9 +383,33 @@ function resetGame() {
     initGame();
 }
 
-// TOP TOOLBAR TTS
+// TOP TOOLBAR TTS & STT
 function playToolbarWelcome() {
     speakText("Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!");
+}
+
+function startToolbarSTT() {
+    if (!SpeechRecognition) {
+        alert("Speech Recognition not supported on this browser.");
+        return;
+    }
+    try {
+        if (recognition) recognition.abort();
+        recognition = new SpeechRecognition();
+        recognition.lang = "en-IN";
+        document.getElementById("status-bar").textContent = "Status: Toolbar Microphone Check... Speak now!";
+        
+        recognition.onresult = (event) => {
+            const spoken = event.results[0][0].transcript.trim();
+            document.getElementById("status-bar").textContent = `Toolbar Mic Check Result: "${spoken}"`;
+        };
+        recognition.onerror = (e) => {
+            document.getElementById("status-bar").textContent = "Toolbar Mic Error: " + e.error;
+        };
+        recognition.start();
+    } catch(err) {
+        console.error(err);
+    }
 }
 
 // PROVEN TTS ENGINE
@@ -430,8 +495,8 @@ function testSpeechWord(targetWord) {
             }
         };
 
-        recognition.onerror = () => {
-            statusDiv.textContent = "Error/Retry";
+        recognition.onerror = (e) => {
+            statusDiv.textContent = "Error: " + e.error;
             statusDiv.style.color = "#ef4444";
         };
 
@@ -456,7 +521,7 @@ function submitData() {
     clearInterval(timerInterval);
     document.getElementById("status-bar").textContent = "Status: Submitting evaluation data to Google Sheet...";
 
-    // Submitting via Google Apps Script Web App / Form URL endpoint targeting your Sheet ID
+    // Apps Script Endpoint targeting Google Sheet ID: 1wvXXEzZkSj0MiaPHsjgbZATWEBuPUi3zUynB8yJmrPk
     const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
 
     const payload = {
