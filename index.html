@@ -61,10 +61,23 @@ body {
     font-weight: 600;
     color: white;
 }
+.user-said-box {
+    background: #0f172a;
+    border: 1px solid #38bdf8;
+    color: #38bdf8;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    max-width: 250px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 /* MAIN CONTAINER */
 .container {
-    max-width: 900px;
+    max-width: 950px;
     margin: 20px auto;
     padding: 25px;
     background: #1e293b;
@@ -144,21 +157,51 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-orange { background: #f59e0b; }
 .btn-red { background: #ef4444; }
 
-/* LEVEL 1: SORTING TILES */
-.sort-container {
+/* LEVEL 1: SHUFFLED POOL & DROP ZONES */
+.source-pool {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
     justify-content: center;
-    min-height: 80px;
-    padding: 15px;
+    min-height: 70px;
+    padding: 12px;
     background: #0f172a;
     border-radius: 10px;
+    border: 1px solid #334155;
+    margin-bottom: 20px;
+}
+.drop-zones-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+.drop-slot {
+    background: #0f172a;
     border: 2px dashed #475569;
+    border-radius: 10px;
+    min-height: 75px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    position: relative;
+}
+.drop-slot.drag-over {
+    border-color: #38bdf8;
+    background: #1e293b;
+}
+.slot-number {
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    font-size: 11px;
+    color: #64748b;
+    font-weight: bold;
 }
 .sort-card {
     background: #334155;
-    padding: 10px 15px;
+    padding: 8px 12px;
     border-radius: 8px;
     cursor: grab;
     display: flex;
@@ -167,21 +210,18 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     font-weight: bold;
     color: #f8fafc;
     user-select: none;
-    transition: transform 0.15s, background 0.15s;
-}
-.sort-card.dragging {
-    opacity: 0.5;
-    background: #38bdf8;
+    width: 100%;
+    justify-content: space-between;
 }
 .sort-card button {
     padding: 4px 8px;
     font-size: 12px;
 }
 
-/* LEVEL 2: STT RESPONSES */
+/* LEVEL 2: SERIAL NUMBER CARDS */
 .stt-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
     gap: 12px;
 }
 .stt-card {
@@ -189,20 +229,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     padding: 12px;
     border-radius: 8px;
     border: 1px solid #334155;
-    text-align: left;
-}
-.stt-word { font-weight: bold; color: #38bdf8; font-size: 1.1rem; }
-.stt-status { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
-
-#status-bar {
-    font-weight: bold;
-    color: #facc15;
-    background: #334155;
-    padding: 12px;
-    border-radius: 8px;
-    margin: 15px 0;
     text-align: center;
 }
+.stt-serial { font-weight: bold; color: #38bdf8; font-size: 1.3rem; }
+.stt-status { font-size: 0.85rem; color: #94a3b8; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -215,7 +245,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     <div class="toolbar-controls">
         <button class="toolbar-btn btn-green" onclick="playToolbarWelcome()">🔊 Check TTS!</button>
         <button class="toolbar-btn btn-blue" onclick="startToolbarSTT()">🎙️ Check Mic!</button>
-        <button class="toolbar-btn btn-red" onclick="stopSmartTTS()">🔇 Stop</button>
+        <div class="user-said-box" id="userSaidDisplay">You said: ...</div>
     </div>
 </div>
 
@@ -233,7 +263,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         </div>
         <div class="form-field">
             <label for="userWhatsapp">WhatsApp Number:</label>
-            <input type="number" id="userWhatsapp" placeholder="Enter 10-digit mobile">
+            <input type="text" id="userWhatsapp" placeholder="Enter WhatsApp Number">
         </div>
     </div>
 
@@ -247,20 +277,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         </div>
     </div>
 
-    <div id="status-bar">Status: Register student details and press Start Game.</div>
-
-    <!-- LEVEL 1: LISTENING & SORTING -->
+    <!-- LEVEL 1: LISTENING & DROP ZONES -->
     <h2>Level 1: Listen &amp; Sort Days of the Week</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Tap audio buttons to hear each word, then drag/reorder them into correct sequence.</p>
-    <div class="sort-container" id="sortContainer">
-        <!-- Dynamic Cards Inserted Here -->
+    <p style="color: #94a3b8; font-size: 0.95rem;">Tap audio buttons to hear each word, then drag them into the numbered drop zones (1 to 10).</p>
+    
+    <div class="source-pool" id="sourcePool">
+        <!-- Shuffled Cards Placed Here -->
     </div>
 
-    <!-- LEVEL 2: VOICE EVALUATION -->
+    <div class="drop-zones-grid" id="dropZonesGrid">
+        <!-- 10 Dedicated Drop Slots -->
+    </div>
+
+    <!-- LEVEL 2: VOICE EVALUATION WITH SERIAL NUMBERS ONLY -->
     <h2>Level 2: Speak All 10 Words</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Tap the mic button and pronounce each word clearly.</p>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Tap the mic button on each item number and pronounce the corresponding word clearly.</p>
     <div class="stt-grid" id="sttGrid">
-        <!-- Dynamic STT Cards Inserted Here -->
+        <!-- Serial Number STT Cards Inserted Here -->
     </div>
 </div>
 
@@ -280,25 +313,46 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 let draggedCard = null;
 
-// Initialize Level 1 Cards & Level 2 STT
+// Initialize Level 1 Slots & Level 2 STT
 function initGame() {
-    const sortContainer = document.getElementById("sortContainer");
-    sortContainer.innerHTML = "";
-    
-    // Setup Drag-and-Drop Container Handlers
-    sortContainer.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        const afterElement = getDragAfterElement(sortContainer, e.clientX);
-        if (draggedCard) {
-            if (afterElement == null) {
-                sortContainer.appendChild(draggedCard);
-            } else {
-                sortContainer.insertBefore(draggedCard, afterElement);
-            }
-        }
-    });
+    const sourcePool = document.getElementById("sourcePool");
+    const dropZonesGrid = document.getElementById("dropZonesGrid");
+    sourcePool.innerHTML = "";
+    dropZonesGrid.innerHTML = "";
 
-    // Shuffled copy for sorting
+    // Create 10 Dedicated Drop Slots for Level 1
+    for (let i = 1; i <= 10; i++) {
+        const slot = document.createElement("div");
+        slot.className = "drop-slot";
+        slot.dataset.slotIndex = i;
+        slot.innerHTML = `<span class="slot-number">Slot ${i}</span>`;
+
+        slot.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            slot.classList.add("drag-over");
+        });
+
+        slot.addEventListener("dragleave", () => {
+            slot.classList.remove("drag-over");
+        });
+
+        slot.addEventListener("drop", (e) => {
+            e.preventDefault();
+            slot.classList.remove("drag-over");
+            if (draggedCard) {
+                // If slot already has a card, return old card to source pool
+                const existingCard = slot.querySelector(".sort-card");
+                if (existingCard) {
+                    sourcePool.appendChild(existingCard);
+                }
+                slot.appendChild(draggedCard);
+            }
+        });
+
+        dropZonesGrid.appendChild(slot);
+    }
+
+    // Shuffled Word Cards
     const shuffled = [...targetWords].sort(() => Math.random() - 0.5);
     shuffled.forEach((word) => {
         const card = document.createElement("div");
@@ -307,47 +361,32 @@ function initGame() {
         card.dataset.word = word;
         card.innerHTML = `<span>${word}</span> <button class="btn-blue" onclick="speakText('${word}')">🔊</button>`;
         
-        // Drag Event Handlers
         card.addEventListener("dragstart", () => {
             draggedCard = card;
-            card.classList.add("dragging");
         });
 
         card.addEventListener("dragend", () => {
             draggedCard = null;
-            card.classList.remove("dragging");
         });
 
-        sortContainer.appendChild(card);
+        sourcePool.appendChild(card);
     });
 
-    // Level 2 STT Cards
+    // Level 2 STT Cards displaying ONLY Serial Numbers
     const sttGrid = document.getElementById("sttGrid");
     sttGrid.innerHTML = "";
-    targetWords.forEach((word) => {
+    targetWords.forEach((word, index) => {
+        const serialNum = index + 1;
         const card = document.createElement("div");
         card.className = "stt-card";
-        card.id = `stt-card-${word}`;
+        card.id = `stt-card-${serialNum}`;
         card.innerHTML = `
-            <div class="stt-word">${word}</div>
-            <button class="btn-green" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechWord('${word}')">🎙️ Speak</button>
-            <div class="stt-status" id="stt-status-${word}">Pending</div>
+            <div class="stt-serial">Word #${serialNum}</div>
+            <button class="btn-green" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechWord('${word}', ${serialNum})">🎙️ Speak</button>
+            <div class="stt-status" id="stt-status-${serialNum}">Pending</div>
         `;
         sttGrid.appendChild(card);
     });
-}
-
-function getDragAfterElement(container, x) {
-    const draggableElements = [...container.querySelectorAll('.sort-card:not(.dragging)')];
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = x - box.left - box.width / 2;
-        if (offset < 0 && offset > closest.offset) {
-            return { offset: offset, element: child };
-        } else {
-            return closest;
-        }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
 }
 
 // TIMER FUNCTIONS
@@ -362,7 +401,6 @@ function startGame() {
     secondsElapsed = 0;
     document.getElementById("startBtn").disabled = true;
     document.getElementById("submitBtn").disabled = false;
-    document.getElementById("status-bar").textContent = "Status: Game running... Complete Level 1 & Level 2.";
     
     timerInterval = setInterval(() => {
         secondsElapsed++;
@@ -379,7 +417,7 @@ function resetGame() {
     document.getElementById("timer").textContent = "00:00";
     document.getElementById("startBtn").disabled = false;
     document.getElementById("submitBtn").disabled = true;
-    document.getElementById("status-bar").textContent = "Status: Reset completed. Press Start Game.";
+    document.getElementById("userSaidDisplay").textContent = "You said: ...";
     initGame();
 }
 
@@ -397,14 +435,14 @@ function startToolbarSTT() {
         if (recognition) recognition.abort();
         recognition = new SpeechRecognition();
         recognition.lang = "en-IN";
-        document.getElementById("status-bar").textContent = "Status: Toolbar Microphone Check... Speak now!";
+        document.getElementById("userSaidDisplay").textContent = "You said: Listening...";
         
         recognition.onresult = (event) => {
             const spoken = event.results[0][0].transcript.trim();
-            document.getElementById("status-bar").textContent = `Toolbar Mic Check Result: "${spoken}"`;
+            document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
         };
         recognition.onerror = (e) => {
-            document.getElementById("status-bar").textContent = "Toolbar Mic Error: " + e.error;
+            document.getElementById("userSaidDisplay").textContent = "You said: Error/No Speech";
         };
         recognition.start();
     } catch(err) {
@@ -468,7 +506,7 @@ function stopSmartTTS() {
 }
 
 // LEVEL 2 INDIVIDUAL WORD STT TEST
-function testSpeechWord(targetWord) {
+function testSpeechWord(targetWord, serialNum) {
     if (!SpeechRecognition) {
         alert("Speech Recognition not supported on this browser.");
         return;
@@ -480,12 +518,13 @@ function testSpeechWord(targetWord) {
         recognition.lang = "en-IN";
         recognition.interimResults = false;
         
-        const statusDiv = document.getElementById(`stt-status-${targetWord}`);
+        const statusDiv = document.getElementById(`stt-status-${serialNum}`);
         statusDiv.textContent = "Listening...";
         statusDiv.style.color = "#facc15";
 
         recognition.onresult = (event) => {
             const spoken = event.results[0][0].transcript.trim().toLowerCase();
+            document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
             if (spoken.includes(targetWord.toLowerCase())) {
                 statusDiv.textContent = "✓ Verified";
                 statusDiv.style.color = "#22c55e";
@@ -519,7 +558,6 @@ function submitData() {
     }
 
     clearInterval(timerInterval);
-    document.getElementById("status-bar").textContent = "Status: Submitting evaluation data to Google Sheet...";
 
     // Apps Script Endpoint targeting Google Sheet ID: 1wvXXEzZkSj0MiaPHsjgbZATWEBuPUi3zUynB8yJmrPk
     const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
@@ -538,10 +576,8 @@ function submitData() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     }).then(() => {
-        document.getElementById("status-bar").textContent = `Status: Submitted Successfully! Total Time: ${timeTaken}`;
-        alert("Evaluation submitted successfully to Google Sheet!");
+        alert(`Submitted Successfully! Total Time: ${timeTaken}`);
     }).catch((err) => {
-        document.getElementById("status-bar").textContent = "Submitted with network fallback confirmation.";
         alert("Submitted!");
     });
 }
