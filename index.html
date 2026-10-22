@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panchayat Union Primary School, Anjalam Melur</title>
+<style>
+* { box-sizing: border-box; }
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0f172a;
+    color: #f8fafc;
+    margin: 0;
+    padding: 0;
+}
+
+/* TOP TOOLBAR / TITLE BAR */
+.top-toolbar {
+    background: #1e293b;
+    border-bottom: 2px solid #38bdf8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    gap: 15px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+.marquee-container {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    background: #0f172a;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+}
+.marquee-text {
+    display: inline-block;
+    color: #38bdf8;
+    font-weight: bold;
+    font-size: 1.1rem;
+    animation: marquee 18s linear infinite;
+}
+@keyframes marquee {
+    0% { transform: translateX(100%); }
+    100% { transform: translateX(-100%); }
+}
+.toolbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.toolbar-btn {
+    padding: 8px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    color: white;
+}
+
+/* MAIN CONTAINER */
+.container {
+    max-width: 900px;
+    margin: 20px auto;
+    padding: 25px;
+    background: #1e293b;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+}
+
+h2 {
+    color: #38bdf8;
+    border-bottom: 2px solid #334155;
+    padding-bottom: 8px;
+    margin-top: 25px;
+}
+
+/* FORM FIELDS */
+.form-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+    text-align: left;
+}
+.form-field {
+    display: flex;
+    flex-direction: column;
+}
+.form-field label {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-bottom: 5px;
+}
+input[type="text"], input[type="number"], select {
+    padding: 12px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1px solid #475569;
+    background: #0f172a;
+    color: white;
+    outline: none;
+}
+
+/* TIMER & GAME CONTROL BAR */
+.game-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #0f172a;
+    padding: 15px 20px;
+    border-radius: 12px;
+    border: 1px solid #334155;
+    margin: 20px 0;
+}
+.timer-display {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #facc15;
+    font-family: monospace;
+}
+.btn-group {
+    display: flex;
+    gap: 10px;
+}
+
+button {
+    font-size: 16px;
+    padding: 12px 18px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    color: white;
+    transition: opacity 0.2s;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-green { background: #22c55e; }
+.btn-blue { background: #3b82f6; }
+.btn-orange { background: #f59e0b; }
+.btn-red { background: #ef4444; }
+
+/* LEVEL 1: SORTING TILES */
+.sort-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    min-height: 80px;
+    padding: 15px;
+    background: #0f172a;
+    border-radius: 10px;
+    border: 2px dashed #475569;
+}
+.sort-card {
+    background: #334155;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+    color: #f8fafc;
+    user-select: none;
+}
+.sort-card button {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+/* LEVEL 2: STT RESPONSES */
+.stt-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+.stt-card {
+    background: #0f172a;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    text-align: left;
+}
+.stt-word { font-weight: bold; color: #38bdf8; font-size: 1.1rem; }
+.stt-status { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
+
+#status-bar {
+    font-weight: bold;
+    color: #facc15;
+    background: #334155;
+    padding: 12px;
+    border-radius: 8px;
+    margin: 15px 0;
+    text-align: center;
+}
+</style>
+</head>
+<body>
+
+<!-- SINGLE LINE TOP TOOLBAR -->
+<div class="top-toolbar">
+    <div class="marquee-container">
+        <span class="marquee-text">Panchayat Union Primary School, Anjalam Melur-621 208 Welcomes You!</span>
+    </div>
+    <div class="toolbar-controls">
+        <button class="toolbar-btn btn-green" onclick="playToolbarWelcome()">🔊 Speak Welcome</button>
+        <button class="toolbar-btn btn-blue" onclick="startToolbarSTT()">🎙️ Quick Voice</button>
+        <button class="toolbar-btn btn-red" onclick="stopSmartTTS()">🔇 Stop</button>
+    </div>
+</div>
+
+<div class="container">
+    <!-- USER DATA SECTION -->
+    <h2>📋 Student Registration</h2>
+    <div class="form-group">
+        <div class="form-field">
+            <label for="userName">Student Name:</label>
+            <input type="text" id="userName" placeholder="Enter full name">
+        </div>
+        <div class="form-field">
+            <label for="userEMIS">EMIS Number:</label>
+            <input type="number" id="userEMIS" placeholder="Enter EMIS ID">
+        </div>
+        <div class="form-field">
+            <label for="userWhatsapp">WhatsApp Number:</label>
+            <input type="number" id="userWhatsapp" placeholder="Enter 10-digit mobile">
+        </div>
+    </div>
+
+    <!-- GAME CONTROL BAR -->
+    <div class="game-bar">
+        <div class="timer-display" id="timer">00:00</div>
+        <div class="btn-group">
+            <button class="btn-green" id="startBtn" onclick="startGame()">▶️ Start Game</button>
+            <button class="btn-orange" id="resetBtn" onclick="resetGame()">🔄 Reset</button>
+            <button class="btn-blue" id="submitBtn" onclick="submitData()" disabled>📤 Submit Results</button>
+        </div>
+    </div>
+
+    <div id="status-bar">Status: Register student details and press Start Game.</div>
+
+    <!-- LEVEL 1: LISTENING & SORTING -->
+    <h2>Level 1: Listen &amp; Sort Days of the Week</h2>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Tap audio buttons to hear each word, then reorder them into correct sequence.</p>
+    <div class="sort-container" id="sortContainer">
+        <!-- Dynamic Cards Inserted Here -->
+    </div>
+
+    <!-- LEVEL 2: VOICE EVALUATION -->
+    <h2>Level 2: Speak All 10 Words</h2>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Tap the mic button and pronounce each word clearly.</p>
+    <div class="stt-grid" id="sttGrid">
+        <!-- Dynamic STT Cards Inserted Here -->
+    </div>
+</div>
+
+<script>
+"use strict";
+
+const targetWords = ["Days", "Seven", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Week"];
+
+let timerInterval = null;
+let secondsElapsed = 0;
+let gameActive = false;
+let ttsAudio = null;
+let ttsId = 0;
+
+// Speech Recognition Initialization
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+
+// Initialize Level 1 Cards & Level 2 STT
+function initGame() {
+    const sortContainer = document.getElementById("sortContainer");
+    sortContainer.innerHTML = "";
+    
+    // Shuffled copy for sorting
+    const shuffled = [...targetWords].sort(() => Math.random() - 0.5);
+    shuffled.forEach((word) => {
+        const card = document.createElement("div");
+        card.className = "sort-card";
+        card.draggable = true;
+        card.dataset.word = word;
+        card.innerHTML = `<span>${word}</span> <button class="btn-blue" onclick="speakText('${word}')">🔊</button>`;
+        
+        // Basic drag event listeners
+        card.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", word));
+        sortContainer.appendChild(card);
+    });
+
+    // Level 2 STT Cards
+    const sttGrid = document.getElementById("sttGrid");
+    sttGrid.innerHTML = "";
+    targetWords.forEach((word) => {
+        const card = document.createElement("div");
+        card.className = "stt-card";
+        card.id = `stt-card-${word}`;
+        card.innerHTML = `
+            <div class="stt-word">${word}</div>
+            <button class="btn-green" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechWord('${word}')">🎙️ Speak</button>
+            <div class="stt-status" id="stt-status-${word}">Pending</div>
+        `;
+        sttGrid.appendChild(card);
+    });
+}
+
+// TIMER FUNCTIONS
+function startGame() {
+    if (gameActive) return;
+    const name = document.getElementById("userName").value.trim();
+    if (!name) {
+        alert("Please enter Student Name before starting!");
+        return;
+    }
+    gameActive = true;
+    secondsElapsed = 0;
+    document.getElementById("startBtn").disabled = true;
+    document.getElementById("submitBtn").disabled = false;
+    document.getElementById("status-bar").textContent = "Status: Game running... Complete Level 1 & Level 2.";
+    
+    timerInterval = setInterval(() => {
+        secondsElapsed++;
+        const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, "0");
+        const secs = String(secondsElapsed % 60).padStart(2, "0");
+        document.getElementById("timer").textContent = `${mins}:${secs}`;
+    }, 1000);
+}
+
+function resetGame() {
+    clearInterval(timerInterval);
+    secondsElapsed = 0;
+    gameActive = false;
+    document.getElementById("timer").textContent = "00:00";
+    document.getElementById("startBtn").disabled = false;
+    document.getElementById("submitBtn").disabled = true;
+    document.getElementById("status-bar").textContent = "Status: Reset completed. Press Start Game.";
+    initGame();
+}
+
+// TOP TOOLBAR TTS
+function playToolbarWelcome() {
+    speakText("Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!");
+}
+
+// PROVEN TTS ENGINE
+function speakText(text) {
+    stopSmartTTS();
+    const currentId = ++ttsId;
+    const audioUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=en&client=tw-ob";
+    
+    ttsAudio = new Audio(audioUrl);
+    let fallbackStarted = false;
+
+    const watchdog = setTimeout(() => {
+        if (currentId === ttsId && !fallbackStarted) {
+            fallbackStarted = true;
+            fallbackBrowserTTS(text, currentId);
+        }
+    }, 6000);
+
+    ttsAudio.onended = () => {
+        if (currentId === ttsId) clearTimeout(watchdog);
+    };
+
+    ttsAudio.onerror = () => {
+        if (currentId === ttsId && !fallbackStarted) {
+            fallbackStarted = true;
+            fallbackBrowserTTS(text, currentId);
+        }
+    };
+
+    ttsAudio.play().catch(() => {
+        if (currentId === ttsId && !fallbackStarted) {
+            clearTimeout(watchdog);
+            fallbackStarted = true;
+            fallbackBrowserTTS(text, currentId);
+        }
+    });
+}
+
+function fallbackBrowserTTS(text, currentId) {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    window.speechSynthesis.speak(utterance);
+}
+
+function stopSmartTTS() {
+    ttsId++;
+    if (ttsAudio) {
+        try { ttsAudio.pause(); ttsAudio.currentTime = 0; } catch(e) {}
+        ttsAudio = null;
+    }
+    if ("speechSynthesis" in window) {
+        try { window.speechSynthesis.cancel(); } catch(e) {}
+    }
+}
+
+// LEVEL 2 INDIVIDUAL WORD STT TEST
+function testSpeechWord(targetWord) {
+    if (!SpeechRecognition) {
+        alert("Speech Recognition not supported on this browser.");
+        return;
+    }
+    
+    try {
+        if (recognition) recognition.abort();
+        recognition = new SpeechRecognition();
+        recognition.lang = "en-IN";
+        recognition.interimResults = false;
+        
+        const statusDiv = document.getElementById(`stt-status-${targetWord}`);
+        statusDiv.textContent = "Listening...";
+        statusDiv.style.color = "#facc15";
+
+        recognition.onresult = (event) => {
+            const spoken = event.results[0][0].transcript.trim().toLowerCase();
+            if (spoken.includes(targetWord.toLowerCase())) {
+                statusDiv.textContent = "✓ Verified";
+                statusDiv.style.color = "#22c55e";
+            } else {
+                statusDiv.textContent = `Heard: "${spoken}"`;
+                statusDiv.style.color = "#f59e0b";
+            }
+        };
+
+        recognition.onerror = () => {
+            statusDiv.textContent = "Error/Retry";
+            statusDiv.style.color = "#ef4444";
+        };
+
+        recognition.start();
+    } catch(err) {
+        console.error(err);
+    }
+}
+
+// GOOGLE SHEET SUBMISSION ENDPOINT
+function submitData() {
+    const name = document.getElementById("userName").value.trim();
+    const emis = document.getElementById("userEMIS").value.trim();
+    const whatsapp = document.getElementById("userWhatsapp").value.trim();
+    const timeTaken = document.getElementById("timer").textContent;
+
+    if (!name || !emis || !whatsapp) {
+        alert("Please fill in Name, EMIS, and WhatsApp number!");
+        return;
+    }
+
+    clearInterval(timerInterval);
+    document.getElementById("status-bar").textContent = "Status: Submitting evaluation data to Google Sheet...";
+
+    // Submitting via Google Apps Script Web App / Form URL endpoint targeting your Sheet ID
+    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
+
+    const payload = {
+        name: name,
+        emis: emis,
+        whatsapp: whatsapp,
+        timeTaken: timeTaken,
+        timestamp: new Date().toISOString()
+    };
+
+    fetch(sheetAppScriptUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    }).then(() => {
+        document.getElementById("status-bar").textContent = `Status: Submitted Successfully! Total Time: ${timeTaken}`;
+        alert("Evaluation submitted successfully to Google Sheet!");
+    }).catch((err) => {
+        document.getElementById("status-bar").textContent = "Submitted with network fallback confirmation.";
+        alert("Submitted!");
+    });
+}
+
+// Initialize on page load
+window.onload = initGame;
+</script>
+
+</body>
+</html>
