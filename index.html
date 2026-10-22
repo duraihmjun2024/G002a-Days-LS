@@ -119,7 +119,17 @@ input[type="text"], input[type="number"], select {
     outline: none;
 }
 
-/* TIMER & GAME CONTROL BAR */
+/* BLINKING LISTEN BUTTON */
+.btn-blink {
+    background: #ec4899;
+    animation: blinker 1s linear infinite;
+    font-weight: bold;
+}
+@keyframes blinker {
+    50% { opacity: 0.3; }
+}
+
+/* TIMER & SCORE BAR */
 .game-bar {
     display: flex;
     align-items: center;
@@ -129,12 +139,24 @@ input[type="text"], input[type="number"], select {
     border-radius: 12px;
     border: 1px solid #334155;
     margin: 20px 0;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+.stats-display {
+    display: flex;
+    align-items: center;
+    gap: 20px;
 }
 .timer-display {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     font-weight: bold;
     color: #facc15;
     font-family: monospace;
+}
+.score-display {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #22c55e;
 }
 .btn-group {
     display: flex;
@@ -157,19 +179,37 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-orange { background: #f59e0b; }
 .btn-red { background: #ef4444; }
 
-/* LEVEL 1: SHUFFLED POOL & DROP ZONES */
+/* LEVEL 1: SINGLE-LINE SPEAKER ICON CARDS & DROP SLOTS */
 .source-pool {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-wrap: nowrap;
+    gap: 12px;
     justify-content: center;
-    min-height: 70px;
+    align-items: center;
+    min-height: 75px;
     padding: 12px;
     background: #0f172a;
     border-radius: 10px;
     border: 1px solid #334155;
     margin-bottom: 20px;
+    overflow-x: auto;
 }
+.icon-only-card {
+    background: #3b82f6;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 10px;
+    cursor: grab;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: transform 0.15s;
+    flex-shrink: 0;
+}
+.icon-only-card:active { cursor: grabbing; transform: scale(0.95); }
+
 .drop-zones-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -199,29 +239,11 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     color: #64748b;
     font-weight: bold;
 }
-.sort-card {
-    background: #334155;
-    padding: 8px 12px;
-    border-radius: 8px;
-    cursor: grab;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: bold;
-    color: #f8fafc;
-    user-select: none;
-    width: 100%;
-    justify-content: space-between;
-}
-.sort-card button {
-    padding: 4px 8px;
-    font-size: 12px;
-}
 
-/* LEVEL 2: SERIAL NUMBER CARDS */
+/* LEVEL 2: TIMED SERIAL NUMBER CARDS */
 .stt-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: 12px;
 }
 .stt-card {
@@ -230,9 +252,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     border-radius: 8px;
     border: 1px solid #334155;
     text-align: center;
+    position: relative;
 }
-.stt-serial { font-weight: bold; color: #38bdf8; font-size: 1.3rem; }
-.stt-status { font-size: 0.85rem; color: #94a3b8; margin-top: 6px; }
+.stt-card.active-box {
+    border: 2px solid #facc15;
+    background: #1e293b;
+}
+.stt-serial { font-weight: bold; color: #38bdf8; font-size: 1.2rem; }
+.stt-user-speech { font-size: 0.9rem; color: #facc15; margin-top: 4px; font-weight: 500; min-height: 20px; }
+.stt-status { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
+.box-timer { font-size: 0.8rem; color: #ef4444; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -267,31 +296,35 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
         </div>
     </div>
 
-    <!-- GAME CONTROL BAR -->
+    <!-- GAME CONTROL BAR WITH SCORE & PERCENTAGE -->
     <div class="game-bar">
-        <div class="timer-display" id="timer">00:00</div>
+        <div class="stats-display">
+            <div class="timer-display" id="timer">00:00</div>
+            <div class="score-display" id="scoreDisplay">Score: 0/20 (0%)</div>
+        </div>
         <div class="btn-group">
+            <button class="btn-blink" id="listenBtn" onclick="listen3Times()">🎧 Listen (3 Times)</button>
             <button class="btn-green" id="startBtn" onclick="startGame()">▶️ Start Game</button>
             <button class="btn-orange" id="resetBtn" onclick="resetGame()">🔄 Reset</button>
             <button class="btn-blue" id="submitBtn" onclick="submitData()" disabled>📤 Submit Results</button>
         </div>
     </div>
 
-    <!-- LEVEL 1: LISTENING & DROP ZONES -->
+    <!-- LEVEL 1: LISTENING & SPEAKER ICONS -->
     <h2>Level 1: Listen &amp; Sort Days of the Week</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Tap audio buttons to hear each word, then drag them into the numbered drop zones (1 to 10).</p>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Tap any speaker icon to hear the audio clip, then drag icons into the numbered drop slots (1 to 10).</p>
     
     <div class="source-pool" id="sourcePool">
-        <!-- Shuffled Cards Placed Here -->
+        <!-- Shuffled Speaker Icons Inserted Here -->
     </div>
 
     <div class="drop-zones-grid" id="dropZonesGrid">
         <!-- 10 Dedicated Drop Slots -->
     </div>
 
-    <!-- LEVEL 2: VOICE EVALUATION WITH SERIAL NUMBERS ONLY -->
-    <h2>Level 2: Speak All 10 Words</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Tap the mic button on each item number and pronounce the corresponding word clearly.</p>
+    <!-- LEVEL 2: VOICE EVALUATION (5 SECONDS AUTO-ADVANCE) -->
+    <h2>Level 2: Speak All 10 Words (5s per Box)</h2>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Each box gives 5 seconds to pronounce the target word clearly before advancing.</p>
     <div class="stt-grid" id="sttGrid">
         <!-- Serial Number STT Cards Inserted Here -->
     </div>
@@ -307,20 +340,43 @@ let secondsElapsed = 0;
 let gameActive = false;
 let ttsAudio = null;
 let ttsId = 0;
+let level1Score = 0;
+let level2Score = 0;
 
-// Speech Recognition Initialization
+// Speech Recognition
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let draggedCard = null;
+let currentL2Index = 0;
+let boxTimerInterval = null;
 
-// Initialize Level 1 Slots & Level 2 STT
+// Pre-Game Listen 3 Times Loop
+async function listen3Times() {
+    const listenBtn = document.getElementById("listenBtn");
+    listenBtn.disabled = true;
+    for (let round = 1; round <= 3; round++) {
+        for (let word of targetWords) {
+            await speakTextAsync(word);
+        }
+    }
+    listenBtn.disabled = false;
+}
+
+function speakTextAsync(text) {
+    return new Promise((resolve) => {
+        speakText(text);
+        setTimeout(() => resolve(), 1200);
+    });
+}
+
+// Initialize Game Slots
 function initGame() {
     const sourcePool = document.getElementById("sourcePool");
     const dropZonesGrid = document.getElementById("dropZonesGrid");
     sourcePool.innerHTML = "";
     dropZonesGrid.innerHTML = "";
 
-    // Create 10 Dedicated Drop Slots for Level 1
+    // Create 10 Drop Slots for Level 1
     for (let i = 1; i <= 10; i++) {
         const slot = document.createElement("div");
         slot.className = "drop-slot";
@@ -339,40 +395,36 @@ function initGame() {
         slot.addEventListener("drop", (e) => {
             e.preventDefault();
             slot.classList.remove("drag-over");
-            if (draggedCard) {
-                // If slot already has a card, return old card to source pool
-                const existingCard = slot.querySelector(".sort-card");
+            if (draggedCard && gameActive) {
+                const existingCard = slot.querySelector(".icon-only-card");
                 if (existingCard) {
                     sourcePool.appendChild(existingCard);
                 }
                 slot.appendChild(draggedCard);
+                evaluateLevel1();
             }
         });
 
         dropZonesGrid.appendChild(slot);
     }
 
-    // Shuffled Word Cards
-    const shuffled = [...targetWords].sort(() => Math.random() - 0.5);
-    shuffled.forEach((word) => {
+    // Level 1 Shuffled Speaker-Only Icons
+    const shuffled = [...targetWords].map((word) => ({ word, id: Math.random() })).sort(() => Math.random() - 0.5);
+    shuffled.forEach((item) => {
         const card = document.createElement("div");
-        card.className = "sort-card";
+        card.className = "icon-only-card";
         card.draggable = true;
-        card.dataset.word = word;
-        card.innerHTML = `<span>${word}</span> <button class="btn-blue" onclick="speakText('${word}')">🔊</button>`;
+        card.dataset.word = item.word;
+        card.innerHTML = `🔊`;
         
-        card.addEventListener("dragstart", () => {
-            draggedCard = card;
-        });
-
-        card.addEventListener("dragend", () => {
-            draggedCard = null;
-        });
+        card.addEventListener("click", () => speakText(item.word));
+        card.addEventListener("dragstart", () => { draggedCard = card; });
+        card.addEventListener("dragend", () => { draggedCard = null; });
 
         sourcePool.appendChild(card);
     });
 
-    // Level 2 STT Cards displaying ONLY Serial Numbers
+    // Level 2 Cards
     const sttGrid = document.getElementById("sttGrid");
     sttGrid.innerHTML = "";
     targetWords.forEach((word, index) => {
@@ -382,14 +434,35 @@ function initGame() {
         card.id = `stt-card-${serialNum}`;
         card.innerHTML = `
             <div class="stt-serial">Word #${serialNum}</div>
-            <button class="btn-green" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechWord('${word}', ${serialNum})">🎙️ Speak</button>
+            <div class="stt-user-speech" id="stt-speech-${serialNum}">You said: --</div>
             <div class="stt-status" id="stt-status-${serialNum}">Pending</div>
+            <div class="box-timer" id="box-timer-${serialNum}"></div>
         `;
         sttGrid.appendChild(card);
     });
+
+    updateScoreDisplay();
 }
 
-// TIMER FUNCTIONS
+function evaluateLevel1() {
+    level1Score = 0;
+    for (let i = 1; i <= 10; i++) {
+        const slot = document.querySelector(`.drop-slot[data-slot-index="${i}"]`);
+        const card = slot ? slot.querySelector(".icon-only-card") : null;
+        if (card && card.dataset.word === targetWords[i - 1]) {
+            level1Score += 1;
+        }
+    }
+    updateScoreDisplay();
+}
+
+function updateScoreDisplay() {
+    const totalScore = level1Score + level2Score;
+    const percentage = Math.round((totalScore / 20) * 100);
+    document.getElementById("scoreDisplay").textContent = `Score: ${totalScore}/20 (${percentage}%)`;
+}
+
+// TIMER & GAME CONTROLS
 function startGame() {
     if (gameActive) return;
     const name = document.getElementById("userName").value.trim();
@@ -399,7 +472,10 @@ function startGame() {
     }
     gameActive = true;
     secondsElapsed = 0;
+    level1Score = 0;
+    level2Score = 0;
     document.getElementById("startBtn").disabled = true;
+    document.getElementById("listenBtn").disabled = true;
     document.getElementById("submitBtn").disabled = false;
     
     timerInterval = setInterval(() => {
@@ -408,14 +484,83 @@ function startGame() {
         const secs = String(secondsElapsed % 60).padStart(2, "0");
         document.getElementById("timer").textContent = `${mins}:${secs}`;
     }, 1000);
+
+    // Start Level 2 Timed Sequence
+    currentL2Index = 0;
+    processNextL2Box();
+}
+
+function processNextL2Box() {
+    if (currentL2Index >= 10) {
+        document.getElementById("userSaidDisplay").textContent = "You said: Level 2 Finished!";
+        return;
+    }
+
+    const serialNum = currentL2Index + 1;
+    const targetWord = targetWords[currentL2Index];
+    const card = document.getElementById(`stt-card-${serialNum}`);
+    const speechDiv = document.getElementById(`stt-speech-${serialNum}`);
+    const statusDiv = document.getElementById(`stt-status-${serialNum}`);
+    const timerDiv = document.getElementById(`box-timer-${serialNum}`);
+
+    card.classList.add("active-box");
+    statusDiv.textContent = "Listening...";
+    statusDiv.style.color = "#facc15";
+
+    let timeLeft = 5;
+    timerDiv.textContent = `⏱️ ${timeLeft}s`;
+
+    if (SpeechRecognition) {
+        try {
+            if (recognition) recognition.abort();
+            recognition = new SpeechRecognition();
+            recognition.lang = "en-IN";
+            recognition.interimResults = false;
+
+            recognition.onresult = (event) => {
+                const spoken = event.results[0][0].transcript.trim();
+                document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
+                speechDiv.textContent = `You said: "${spoken}"`;
+
+                if (spoken.toLowerCase().includes(targetWord.toLowerCase())) {
+                    statusDiv.textContent = "✓ Correct (+1)";
+                    statusDiv.style.color = "#22c55e";
+                    level2Score += 1;
+                    updateScoreDisplay();
+                } else {
+                    statusDiv.textContent = "❌ Incorrect";
+                    statusDiv.style.color = "#ef4444";
+                }
+            };
+            recognition.start();
+        } catch(e){}
+    }
+
+    boxTimerInterval = setInterval(() => {
+        timeLeft--;
+        timerDiv.textContent = `⏱️ ${timeLeft}s`;
+        if (timeLeft <= 0) {
+            clearInterval(boxTimerInterval);
+            if (recognition) try { recognition.stop(); } catch(e){}
+            card.classList.remove("active-box");
+            timerDiv.textContent = "";
+            currentL2Index++;
+            processNextL2Box();
+        }
+    }, 1000);
 }
 
 function resetGame() {
     clearInterval(timerInterval);
+    clearInterval(boxTimerInterval);
+    if (recognition) try { recognition.abort(); } catch(e){}
     secondsElapsed = 0;
     gameActive = false;
+    level1Score = 0;
+    level2Score = 0;
     document.getElementById("timer").textContent = "00:00";
     document.getElementById("startBtn").disabled = false;
+    document.getElementById("listenBtn").disabled = false;
     document.getElementById("submitBtn").disabled = true;
     document.getElementById("userSaidDisplay").textContent = "You said: ...";
     initGame();
@@ -441,49 +586,17 @@ function startToolbarSTT() {
             const spoken = event.results[0][0].transcript.trim();
             document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
         };
-        recognition.onerror = (e) => {
-            document.getElementById("userSaidDisplay").textContent = "You said: Error/No Speech";
-        };
         recognition.start();
-    } catch(err) {
-        console.error(err);
-    }
+    } catch(err){}
 }
 
-// PROVEN TTS ENGINE
+// TTS ENGINE
 function speakText(text) {
     stopSmartTTS();
     const currentId = ++ttsId;
     const audioUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=en&client=tw-ob";
-    
     ttsAudio = new Audio(audioUrl);
-    let fallbackStarted = false;
-
-    const watchdog = setTimeout(() => {
-        if (currentId === ttsId && !fallbackStarted) {
-            fallbackStarted = true;
-            fallbackBrowserTTS(text, currentId);
-        }
-    }, 6000);
-
-    ttsAudio.onended = () => {
-        if (currentId === ttsId) clearTimeout(watchdog);
-    };
-
-    ttsAudio.onerror = () => {
-        if (currentId === ttsId && !fallbackStarted) {
-            fallbackStarted = true;
-            fallbackBrowserTTS(text, currentId);
-        }
-    };
-
-    ttsAudio.play().catch(() => {
-        if (currentId === ttsId && !fallbackStarted) {
-            clearTimeout(watchdog);
-            fallbackStarted = true;
-            fallbackBrowserTTS(text, currentId);
-        }
-    });
+    ttsAudio.play().catch(() => fallbackBrowserTTS(text, currentId));
 }
 
 function fallbackBrowserTTS(text, currentId) {
@@ -505,52 +618,14 @@ function stopSmartTTS() {
     }
 }
 
-// LEVEL 2 INDIVIDUAL WORD STT TEST
-function testSpeechWord(targetWord, serialNum) {
-    if (!SpeechRecognition) {
-        alert("Speech Recognition not supported on this browser.");
-        return;
-    }
-    
-    try {
-        if (recognition) recognition.abort();
-        recognition = new SpeechRecognition();
-        recognition.lang = "en-IN";
-        recognition.interimResults = false;
-        
-        const statusDiv = document.getElementById(`stt-status-${serialNum}`);
-        statusDiv.textContent = "Listening...";
-        statusDiv.style.color = "#facc15";
-
-        recognition.onresult = (event) => {
-            const spoken = event.results[0][0].transcript.trim().toLowerCase();
-            document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
-            if (spoken.includes(targetWord.toLowerCase())) {
-                statusDiv.textContent = "✓ Verified";
-                statusDiv.style.color = "#22c55e";
-            } else {
-                statusDiv.textContent = `Heard: "${spoken}"`;
-                statusDiv.style.color = "#f59e0b";
-            }
-        };
-
-        recognition.onerror = (e) => {
-            statusDiv.textContent = "Error: " + e.error;
-            statusDiv.style.color = "#ef4444";
-        };
-
-        recognition.start();
-    } catch(err) {
-        console.error(err);
-    }
-}
-
 // GOOGLE SHEET SUBMISSION ENDPOINT
 function submitData() {
     const name = document.getElementById("userName").value.trim();
     const emis = document.getElementById("userEMIS").value.trim();
     const whatsapp = document.getElementById("userWhatsapp").value.trim();
     const timeTaken = document.getElementById("timer").textContent;
+    const finalScore = level1Score + level2Score;
+    const percentage = Math.round((finalScore / 20) * 100);
 
     if (!name || !emis || !whatsapp) {
         alert("Please fill in Name, EMIS, and WhatsApp number!");
@@ -558,6 +633,7 @@ function submitData() {
     }
 
     clearInterval(timerInterval);
+    clearInterval(boxTimerInterval);
 
     // Apps Script Endpoint targeting Google Sheet ID: 1wvXXEzZkSj0MiaPHsjgbZATWEBuPUi3zUynB8yJmrPk
     const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
@@ -567,6 +643,8 @@ function submitData() {
         emis: emis,
         whatsapp: whatsapp,
         timeTaken: timeTaken,
+        score: `${finalScore}/20`,
+        percentage: `${percentage}%`,
         timestamp: new Date().toISOString()
     };
 
@@ -576,9 +654,9 @@ function submitData() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     }).then(() => {
-        alert(`Submitted Successfully! Total Time: ${timeTaken}`);
-    }).catch((err) => {
-        alert("Submitted!");
+        alert(`Submitted Successfully!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
+    }).catch(() => {
+        alert(`Submitted!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
     });
 }
 
