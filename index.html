@@ -126,7 +126,7 @@ input[type="text"], input[type="number"], select {
     font-weight: bold;
 }
 .icon-blink {
-    animation: blinker 0.6s linear infinite;
+    animation: blinker 0.5s linear infinite;
     background: #facc15 !important;
     color: #0f172a !important;
 }
@@ -328,7 +328,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
 
     <!-- LEVEL 2: VOICE EVALUATION -->
     <h2>Level 2: Speak All 10 Words</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Tap the mic button on each item number and pronounce the corresponding word clearly within 5 seconds.</p>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Speak buttons will enable one by one in order with a 3-second delay after starting the game.</p>
     <div class="stt-grid" id="sttGrid">
         <!-- Serial Number STT Cards Inserted Here -->
     </div>
@@ -356,6 +356,7 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 let draggedCard = null;
 let boxTimerInterval = null;
+let l2ActivationTimeout = null;
 
 // TOP TOOLBAR TOGGLE FUNCTIONS
 function toggleToolbarTTS() {
@@ -421,7 +422,7 @@ function stopToolbarMicState() {
     micBtn.className = "toolbar-btn btn-blue";
 }
 
-// 3 ROUNDS SEQUENTIAL LISTEN WITH BLINKING SPEAKERS
+// 3 ROUNDS SEQUENTIAL LISTEN (4 SECONDS MEMORY PAUSE PER SPEAKER)
 async function listen3RoundsSequence() {
     const name = document.getElementById("userName").value.trim();
     if (!name) {
@@ -441,20 +442,16 @@ async function listen3RoundsSequence() {
             const card = cards[i];
 
             if (card) card.classList.add("icon-blink");
-            await speakTextAsync(word);
+            speakText(word);
+            
+            // 4 seconds pause for user to memorize and repeat out loud
+            await new Promise(resolve => setTimeout(resolve, 4000));
+            
             if (card) card.classList.remove("icon-blink");
         }
     }
 
-    // Enable Start Button after 3 rounds complete
     document.getElementById("startBtn").disabled = false;
-}
-
-function speakTextAsync(text) {
-    return new Promise((resolve) => {
-        speakText(text, () => resolve());
-        setTimeout(() => resolve(), 1200);
-    });
 }
 
 // GAME INITIALIZATION
@@ -464,6 +461,7 @@ function initGame() {
     sourcePool.innerHTML = "";
     dropZonesGrid.innerHTML = "";
     verifiedL2Words.clear();
+    if (l2ActivationTimeout) clearTimeout(l2ActivationTimeout);
 
     // 10 Drop Slots for Level 1
     for (let i = 1; i <= 10; i++) {
@@ -512,7 +510,7 @@ function initGame() {
         sourcePool.appendChild(card);
     });
 
-    // Level 2 STT Cards
+    // Level 2 STT Cards (Initially all Speak buttons disabled)
     const sttGrid = document.getElementById("sttGrid");
     sttGrid.innerHTML = "";
     targetWords.forEach((word, index) => {
@@ -522,9 +520,9 @@ function initGame() {
         card.id = `stt-card-${serialNum}`;
         card.innerHTML = `
             <div class="stt-serial">Word #${serialNum}</div>
-            <button class="btn-green" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechBox('${word}', ${serialNum})">🎙️ Speak</button>
+            <button class="btn-green" id="speak-btn-${serialNum}" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechBox('${word}', ${serialNum})" disabled>🎙️ Speak</button>
             <div class="stt-user-speech" id="stt-speech-${serialNum}">You said: --</div>
-            <div class="stt-status" id="stt-status-${serialNum}">Pending</div>
+            <div class="stt-status" id="stt-status-${serialNum}">Locked</div>
             <div class="box-timer" id="box-timer-${serialNum}"></div>
         `;
         sttGrid.appendChild(card);
@@ -579,6 +577,28 @@ function startGame() {
         const secs = String(secondsElapsed % 60).padStart(2, "0");
         document.getElementById("timer").textContent = `${mins}:${secs}`;
     }, 1000);
+
+    // Enable Level 2 Speak buttons one by one in order with 3-second delay
+    activateLevel2IconsSequentially(0);
+}
+
+function activateLevel2IconsSequentially(index) {
+    if (index >= 10 || !gameActive) return;
+    const serialNum = index + 1;
+    const btn = document.getElementById(`speak-btn-${serialNum}`);
+    const statusDiv = document.getElementById(`stt-status-${serialNum}`);
+    
+    if (btn) {
+        btn.disabled = false;
+        statusDiv.textContent = "Pending";
+        statusDiv.style.color = "#94a3b8";
+    }
+
+    if (index < 9) {
+        l2ActivationTimeout = setTimeout(() => {
+            activateLevel2IconsSequentially(index + 1);
+        }, 3000);
+    }
 }
 
 // LEVEL 2 SPEECH BOX EVALUATION
@@ -663,6 +683,7 @@ function submitData() {
     // Stop Timers and Scoring
     clearInterval(timerInterval);
     if (boxTimerInterval) clearInterval(boxTimerInterval);
+    if (l2ActivationTimeout) clearTimeout(l2ActivationTimeout);
     gameActive = false;
 
     // Enable Reset button for same user replay
@@ -698,6 +719,7 @@ function submitData() {
 function resetSameUser() {
     clearInterval(timerInterval);
     if (boxTimerInterval) clearInterval(boxTimerInterval);
+    if (l2ActivationTimeout) clearTimeout(l2ActivationTimeout);
     if (recognition) try { recognition.abort(); } catch(e){}
     
     secondsElapsed = 0;
