@@ -126,7 +126,7 @@ input[type="text"], input[type="number"], select {
     font-weight: bold;
 }
 .icon-blink {
-    animation: blinker 0.5s linear infinite;
+    animation: blinker 0.6s linear infinite;
     background: #facc15 !important;
     color: #0f172a !important;
 }
@@ -328,7 +328,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
 
     <!-- LEVEL 2: VOICE EVALUATION -->
     <h2>Level 2: Speak All 10 Words</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Speak buttons will enable one by one in order with a 3-second delay after starting the game.</p>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Mics unlock sequentially. Only the active box can be spoken into.</p>
     <div class="stt-grid" id="sttGrid">
         <!-- Serial Number STT Cards Inserted Here -->
     </div>
@@ -350,13 +350,13 @@ let isMicListening = false;
 let level1Score = 0;
 let level2Score = 0;
 let verifiedL2Words = new Set();
+let activeL2Index = 0;
 
 // Speech Recognition
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let draggedCard = null;
 let boxTimerInterval = null;
-let l2ActivationTimeout = null;
 
 // TOP TOOLBAR TOGGLE FUNCTIONS
 function toggleToolbarTTS() {
@@ -422,7 +422,7 @@ function stopToolbarMicState() {
     micBtn.className = "toolbar-btn btn-blue";
 }
 
-// 3 ROUNDS SEQUENTIAL LISTEN (4 SECONDS MEMORY PAUSE PER SPEAKER)
+// 3 ROUNDS SEQUENTIAL LISTEN (3 SECONDS DELAY PER SPEAKER)
 async function listen3RoundsSequence() {
     const name = document.getElementById("userName").value.trim();
     if (!name) {
@@ -444,8 +444,8 @@ async function listen3RoundsSequence() {
             if (card) card.classList.add("icon-blink");
             speakText(word);
             
-            // 4 seconds pause for user to memorize and repeat out loud
-            await new Promise(resolve => setTimeout(resolve, 4000));
+            // Strict 3-second waiting delay per speaker icon
+            await new Promise(resolve => setTimeout(resolve, 3000));
             
             if (card) card.classList.remove("icon-blink");
         }
@@ -461,7 +461,8 @@ function initGame() {
     sourcePool.innerHTML = "";
     dropZonesGrid.innerHTML = "";
     verifiedL2Words.clear();
-    if (l2ActivationTimeout) clearTimeout(l2ActivationTimeout);
+    activeL2Index = 0;
+    if (boxTimerInterval) clearInterval(boxTimerInterval);
 
     // 10 Drop Slots for Level 1
     for (let i = 1; i <= 10; i++) {
@@ -510,7 +511,7 @@ function initGame() {
         sourcePool.appendChild(card);
     });
 
-    // Level 2 STT Cards (Initially all Speak buttons disabled)
+    // Level 2 STT Cards (Only 1st mic enabled initially, rest locked)
     const sttGrid = document.getElementById("sttGrid");
     sttGrid.innerHTML = "";
     targetWords.forEach((word, index) => {
@@ -518,11 +519,12 @@ function initGame() {
         const card = document.createElement("div");
         card.className = "stt-card";
         card.id = `stt-card-${serialNum}`;
+        const isFirst = (index === 0);
         card.innerHTML = `
             <div class="stt-serial">Word #${serialNum}</div>
-            <button class="btn-green" id="speak-btn-${serialNum}" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechBox('${word}', ${serialNum})" disabled>🎙️ Speak</button>
+            <button class="btn-green" id="speak-btn-${serialNum}" style="margin-top:6px; padding:6px 12px; font-size:12px;" onclick="testSpeechBox('${word}', ${serialNum})" ${isFirst ? '' : 'disabled'}>🎙️ Speak</button>
             <div class="stt-user-speech" id="stt-speech-${serialNum}">You said: --</div>
-            <div class="stt-status" id="stt-status-${serialNum}">Locked</div>
+            <div class="stt-status" id="stt-status-${serialNum}">${isFirst ? 'Pending' : 'Locked'}</div>
             <div class="box-timer" id="box-timer-${serialNum}"></div>
         `;
         sttGrid.appendChild(card);
@@ -564,6 +566,7 @@ function startGame() {
     level1Score = 0;
     level2Score = 0;
     verifiedL2Words.clear();
+    activeL2Index = 0;
 
     shuffleSourcePool();
 
@@ -577,31 +580,32 @@ function startGame() {
         const secs = String(secondsElapsed % 60).padStart(2, "0");
         document.getElementById("timer").textContent = `${mins}:${secs}`;
     }, 1000);
-
-    // Enable Level 2 Speak buttons one by one in order with 3-second delay
-    activateLevel2IconsSequentially(0);
 }
 
-function activateLevel2IconsSequentially(index) {
-    if (index >= 10 || !gameActive) return;
-    const serialNum = index + 1;
-    const btn = document.getElementById(`speak-btn-${serialNum}`);
-    const statusDiv = document.getElementById(`stt-status-${serialNum}`);
+// ADVANCE TO NEXT MIC IN ORDER AND LOCK PREVIOUS
+function advanceToNextMic(currentSerial) {
+    const currentCard = document.getElementById(`stt-card-${currentSerial}`);
+    const currentBtn = document.getElementById(`speak-btn-${currentSerial}`);
+    const currentTimerDiv = document.getElementById(`box-timer-${currentSerial}`);
     
-    if (btn) {
-        btn.disabled = false;
-        statusDiv.textContent = "Pending";
-        statusDiv.style.color = "#94a3b8";
-    }
+    currentCard.classList.remove("active-box");
+    if (currentBtn) currentBtn.disabled = true; // Lock previous mic
+    if (currentTimerDiv) currentTimerDiv.textContent = "";
 
-    if (index < 9) {
-        l2ActivationTimeout = setTimeout(() => {
-            activateLevel2IconsSequentially(index + 1);
-        }, 3000);
+    const nextIndex = currentSerial; // currentSerial is 1-based, next index is same as currentSerial
+    if (nextIndex < 10) {
+        const nextSerial = nextIndex + 1;
+        const nextBtn = document.getElementById(`speak-btn-${nextSerial}`);
+        const nextStatus = document.getElementById(`stt-status-${nextSerial}`);
+        if (nextBtn) nextBtn.disabled = false;
+        if (nextStatus) {
+            nextStatus.textContent = "Pending";
+            nextStatus.style.color = "#94a3b8";
+        }
     }
 }
 
-// LEVEL 2 SPEECH BOX EVALUATION
+// LEVEL 2 SPEECH BOX EVALUATION (5-Second Timeout & Sequential Lock)
 function testSpeechBox(targetWord, serialNum) {
     if (!gameActive) {
         alert("Please press Start Game first!");
@@ -626,6 +630,16 @@ function testSpeechBox(targetWord, serialNum) {
     let timeLeft = 5;
     timerDiv.textContent = `⏱️ ${timeLeft}s`;
 
+    let evaluationDone = false;
+
+    const finalizeBox = () => {
+        if (evaluationDone) return;
+        evaluationDone = true;
+        clearInterval(boxTimerInterval);
+        if (recognition) try { recognition.stop(); } catch(e){}
+        advanceToNextMic(serialNum);
+    };
+
     try {
         if (recognition) recognition.abort();
         recognition = new SpeechRecognition();
@@ -649,19 +663,31 @@ function testSpeechBox(targetWord, serialNum) {
                 statusDiv.textContent = `Heard: "${spoken}"`;
                 statusDiv.style.color = "#ef4444";
             }
+            finalizeBox();
+        };
+
+        recognition.onerror = () => {
+            statusDiv.textContent = "Error/Timeout";
+            statusDiv.style.color = "#ef4444";
+            finalizeBox();
+        };
+
+        recognition.onend = () => {
+            finalizeBox();
         };
 
         recognition.start();
-    } catch(e) {}
+    } catch(e) {
+        finalizeBox();
+    }
 
     boxTimerInterval = setInterval(() => {
         timeLeft--;
         timerDiv.textContent = `⏱️ ${timeLeft}s`;
         if (timeLeft <= 0) {
-            clearInterval(boxTimerInterval);
-            if (recognition) try { recognition.stop(); } catch(e){}
-            card.classList.remove("active-box");
-            timerDiv.textContent = "";
+            statusDiv.textContent = "Time Out";
+            statusDiv.style.color = "#ef4444";
+            finalizeBox();
         }
     }, 1000);
 }
@@ -683,7 +709,6 @@ function submitData() {
     // Stop Timers and Scoring
     clearInterval(timerInterval);
     if (boxTimerInterval) clearInterval(boxTimerInterval);
-    if (l2ActivationTimeout) clearTimeout(l2ActivationTimeout);
     gameActive = false;
 
     // Enable Reset button for same user replay
@@ -719,7 +744,6 @@ function submitData() {
 function resetSameUser() {
     clearInterval(timerInterval);
     if (boxTimerInterval) clearInterval(boxTimerInterval);
-    if (l2ActivationTimeout) clearTimeout(l2ActivationTimeout);
     if (recognition) try { recognition.abort(); } catch(e){}
     
     secondsElapsed = 0;
@@ -727,6 +751,7 @@ function resetSameUser() {
     level1Score = 0;
     level2Score = 0;
     verifiedL2Words.clear();
+    activeL2Index = 0;
 
     document.getElementById("timer").textContent = "00:00";
     document.getElementById("scoreDisplay").textContent = "Score: 0/20 (0%)";
