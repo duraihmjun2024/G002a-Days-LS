@@ -162,6 +162,7 @@ input[type="text"], input[type="number"], select {
     font-size: 1.4rem;
     font-weight: bold;
     color: #22c55e;
+    display: none; /* Hidden until submission */
 }
 .btn-group {
     display: flex;
@@ -230,6 +231,12 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
     justify-content: center;
     padding: 8px;
     position: relative;
+}
+.drop-slot.locked {
+    opacity: 0.4;
+    pointer-events: none;
+    border-style: solid;
+    border-color: #334155;
 }
 .drop-slot.drag-over {
     border-color: #38bdf8;
@@ -316,7 +323,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
 
     <!-- LEVEL 1: LISTENING & SPEAKER ICONS -->
     <h2>Level 1: Listen &amp; Sort Days of the Week</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Tap any speaker icon to hear the audio clip, then drag icons into the numbered drop slots (1 to 10).</p>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Drop icons into slots sequentially (Slot 1 must be filled before Slot 2 unlocks).</p>
     
     <div class="source-pool" id="sourcePool">
         <!-- Speaker Icons Inserted Here -->
@@ -328,7 +335,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
 
     <!-- LEVEL 2: VOICE EVALUATION -->
     <h2>Level 2: Speak All 10 Words</h2>
-    <p style="color: #94a3b8; font-size: 0.95rem;">Mics unlock sequentially. Only the active box can be spoken into.</p>
+    <p style="color: #94a3b8; font-size: 0.95rem;">Mics unlock sequentially. Previous mics lock automatically.</p>
     <div class="stt-grid" id="sttGrid">
         <!-- Serial Number STT Cards Inserted Here -->
     </div>
@@ -444,7 +451,6 @@ async function listen3RoundsSequence() {
             if (card) card.classList.add("icon-blink");
             speakText(word);
             
-            // Strict 3-second waiting delay per speaker icon
             await new Promise(resolve => setTimeout(resolve, 3000));
             
             if (card) card.classList.remove("icon-blink");
@@ -464,16 +470,16 @@ function initGame() {
     activeL2Index = 0;
     if (boxTimerInterval) clearInterval(boxTimerInterval);
 
-    // 10 Drop Slots for Level 1
+    // 10 Drop Slots for Level 1 (Strict Sequential Unlocking)
     for (let i = 1; i <= 10; i++) {
         const slot = document.createElement("div");
-        slot.className = "drop-slot";
+        slot.className = i === 1 ? "drop-slot" : "drop-slot locked";
         slot.dataset.slotIndex = i;
         slot.innerHTML = `<span class="slot-number">Slot ${i}</span>`;
 
         slot.addEventListener("dragover", (e) => {
             e.preventDefault();
-            slot.classList.add("drag-over");
+            if (!slot.classList.contains("locked")) slot.classList.add("drag-over");
         });
 
         slot.addEventListener("dragleave", () => {
@@ -483,13 +489,14 @@ function initGame() {
         slot.addEventListener("drop", (e) => {
             e.preventDefault();
             slot.classList.remove("drag-over");
-            if (draggedCard && gameActive) {
+            if (draggedCard && gameActive && !slot.classList.contains("locked")) {
                 const existingCard = slot.querySelector(".icon-only-card");
                 if (existingCard) {
                     sourcePool.appendChild(existingCard);
                 }
                 slot.appendChild(draggedCard);
                 evaluateLevel1();
+                unlockNextDropSlot(i);
             }
         });
 
@@ -530,7 +537,16 @@ function initGame() {
         sttGrid.appendChild(card);
     });
 
+    // Hide score display until submission
+    document.getElementById("scoreDisplay").style.display = "none";
     updateScoreDisplay();
+}
+
+function unlockNextDropSlot(currentSlotIndex) {
+    if (currentSlotIndex < 10) {
+        const nextSlot = document.querySelector(`.drop-slot[data-slot-index="${currentSlotIndex + 1}"]`);
+        if (nextSlot) nextSlot.classList.remove("locked");
+    }
 }
 
 function shuffleSourcePool() {
@@ -592,9 +608,8 @@ function advanceToNextMic(currentSerial) {
     if (currentBtn) currentBtn.disabled = true; // Lock previous mic
     if (currentTimerDiv) currentTimerDiv.textContent = "";
 
-    const nextIndex = currentSerial; // currentSerial is 1-based, next index is same as currentSerial
-    if (nextIndex < 10) {
-        const nextSerial = nextIndex + 1;
+    const nextSerial = currentSerial + 1;
+    if (nextSerial <= 10) {
         const nextBtn = document.getElementById(`speak-btn-${nextSerial}`);
         const nextStatus = document.getElementById(`stt-status-${nextSerial}`);
         if (nextBtn) nextBtn.disabled = false;
@@ -692,7 +707,7 @@ function testSpeechBox(targetWord, serialNum) {
     }, 1000);
 }
 
-// SUBMIT DATA & ENABLE RESET
+// SUBMIT DATA TO GOOGLE SHEET & SHOW SCORE
 function submitData() {
     const name = document.getElementById("userName").value.trim();
     const emis = document.getElementById("userEMIS").value.trim();
@@ -711,12 +726,15 @@ function submitData() {
     if (boxTimerInterval) clearInterval(boxTimerInterval);
     gameActive = false;
 
+    // Display Score on screen after submission
+    document.getElementById("scoreDisplay").style.display = "block";
+
     // Enable Reset button for same user replay
     document.getElementById("submitBtn").disabled = true;
     document.getElementById("resetBtn").disabled = false;
 
     // Apps Script Endpoint targeting Google Sheet ID: 1wvXXEzZkSj0MiaPHsjgbZATWEBuPUi3zUynB8yJmrPk
-    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxo_tMq-tVih-wD5Y6-kfmrOvNGmkZvgwRulcdtQDgdKMrdw0lAJ6O1ij9v8ii4ys8V/exec"; 
+    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
 
     const payload = {
         name: name,
@@ -725,6 +743,8 @@ function submitData() {
         timeTaken: timeTaken,
         score: `${finalScore}/20`,
         percentage: `${percentage}%`,
+        level1Score: `${level1Score}/10`,
+        level2Score: `${level2Score}/10`,
         timestamp: new Date().toISOString()
     };
 
@@ -755,6 +775,7 @@ function resetSameUser() {
 
     document.getElementById("timer").textContent = "00:00";
     document.getElementById("scoreDisplay").textContent = "Score: 0/20 (0%)";
+    document.getElementById("scoreDisplay").style.display = "none";
     document.getElementById("userSaidDisplay").textContent = "You said: ...";
 
     document.getElementById("listenBtn").disabled = false;
