@@ -162,7 +162,7 @@ input[type="text"], input[type="number"], select {
     font-size: 1.4rem;
     font-weight: bold;
     color: #22c55e;
-    display: none; /* Hidden until submission */
+    display: none;
 }
 .btn-group {
     display: flex;
@@ -185,7 +185,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
 .btn-orange { background: #f59e0b; }
 .btn-red { background: #ef4444; }
 
-/* LEVEL 1: SPEAKER ICON CARDS & DROP SLOTS */
+/* LEVEL 1 */
 .source-pool {
     display: flex;
     flex-wrap: nowrap;
@@ -251,7 +251,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
     font-weight: bold;
 }
 
-/* LEVEL 2: SERIAL NUMBER CARDS */
+/* LEVEL 2 */
 .stt-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -277,7 +277,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
 </head>
 <body>
 
-<!-- SINGLE LINE TOP TOOLBAR -->
 <div class="top-toolbar">
     <div class="marquee-container">
         <span class="marquee-text">Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!</span>
@@ -290,7 +289,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
 </div>
 
 <div class="container">
-    <!-- USER DATA SECTION -->
     <h2>📋 Student Registration</h2>
     <div class="form-group">
         <div class="form-field">
@@ -307,7 +305,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
         </div>
     </div>
 
-    <!-- GAME CONTROL BAR -->
     <div class="game-bar">
         <div class="stats-display">
             <div class="timer-display" id="timer">00:00</div>
@@ -321,24 +318,15 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
         </div>
     </div>
 
-    <!-- LEVEL 1: LISTENING & SPEAKER ICONS -->
     <h2>Level 1: Listen &amp; Sort Days of the Week</h2>
     <p style="color: #94a3b8; font-size: 0.95rem;">Drop icons into slots sequentially (Slot 1 must be filled before Slot 2 unlocks).</p>
     
-    <div class="source-pool" id="sourcePool">
-        <!-- Speaker Icons Inserted Here -->
-    </div>
+    <div class="source-pool" id="sourcePool"></div>
+    <div class="drop-zones-grid" id="dropZonesGrid"></div>
 
-    <div class="drop-zones-grid" id="dropZonesGrid">
-        <!-- 10 Drop Slots -->
-    </div>
-
-    <!-- LEVEL 2: VOICE EVALUATION -->
     <h2>Level 2: Speak All 10 Words</h2>
     <p style="color: #94a3b8; font-size: 0.95rem;">Mics unlock sequentially. Previous mics lock automatically.</p>
-    <div class="stt-grid" id="sttGrid">
-        <!-- Serial Number STT Cards Inserted Here -->
-    </div>
+    <div class="stt-grid" id="sttGrid"></div>
 </div>
 
 <script>
@@ -359,13 +347,11 @@ let level2Score = 0;
 let verifiedL2Words = new Set();
 let activeL2Index = 0;
 
-// Speech Recognition
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let draggedCard = null;
 let boxTimerInterval = null;
 
-// TOP TOOLBAR TOGGLE FUNCTIONS
 function toggleToolbarTTS() {
     const ttsBtn = document.getElementById("ttsToggleBtn");
     if (!isTTSSpeaking) {
@@ -429,7 +415,6 @@ function stopToolbarMicState() {
     micBtn.className = "toolbar-btn btn-blue";
 }
 
-// 3 ROUNDS SEQUENTIAL LISTEN (3 SECONDS DELAY PER SPEAKER)
 async function listen3RoundsSequence() {
     const name = document.getElementById("userName").value.trim();
     if (!name) {
@@ -449,10 +434,9 @@ async function listen3RoundsSequence() {
             const card = cards[i];
 
             if (card) card.classList.add("icon-blink");
-            speakText(word);
+            await new Promise(resolve => speakText(word, resolve));
             
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
+            await new Promise(resolve => setTimeout(resolve, 600));
             if (card) card.classList.remove("icon-blink");
         }
     }
@@ -460,7 +444,6 @@ async function listen3RoundsSequence() {
     document.getElementById("startBtn").disabled = false;
 }
 
-// GAME INITIALIZATION
 function initGame() {
     const sourcePool = document.getElementById("sourcePool");
     const dropZonesGrid = document.getElementById("dropZonesGrid");
@@ -470,7 +453,6 @@ function initGame() {
     activeL2Index = 0;
     if (boxTimerInterval) clearInterval(boxTimerInterval);
 
-    // 10 Drop Slots for Level 1 (Strict Sequential Unlocking)
     for (let i = 1; i <= 10; i++) {
         const slot = document.createElement("div");
         slot.className = i === 1 ? "drop-slot" : "drop-slot locked";
@@ -503,7 +485,6 @@ function initGame() {
         dropZonesGrid.appendChild(slot);
     }
 
-    // Level 1 Source Pool Icons
     targetWords.forEach((word) => {
         const card = document.createElement("div");
         card.className = "icon-only-card";
@@ -518,7 +499,6 @@ function initGame() {
         sourcePool.appendChild(card);
     });
 
-    // Level 2 STT Cards (Only 1st mic enabled initially, rest locked)
     const sttGrid = document.getElementById("sttGrid");
     sttGrid.innerHTML = "";
     targetWords.forEach((word, index) => {
@@ -537,7 +517,6 @@ function initGame() {
         sttGrid.appendChild(card);
     });
 
-    // Hide score display until submission
     document.getElementById("scoreDisplay").style.display = "none";
     updateScoreDisplay();
 }
@@ -574,7 +553,6 @@ function updateScoreDisplay() {
     document.getElementById("scoreDisplay").textContent = `Score: ${totalScore}/20 (${percentage}%)`;
 }
 
-// TIMER & START GAME
 function startGame() {
     if (gameActive) return;
     gameActive = true;
@@ -598,14 +576,13 @@ function startGame() {
     }, 1000);
 }
 
-// ADVANCE TO NEXT MIC IN ORDER AND LOCK PREVIOUS
 function advanceToNextMic(currentSerial) {
     const currentCard = document.getElementById(`stt-card-${currentSerial}`);
     const currentBtn = document.getElementById(`speak-btn-${currentSerial}`);
     const currentTimerDiv = document.getElementById(`box-timer-${currentSerial}`);
     
     currentCard.classList.remove("active-box");
-    if (currentBtn) currentBtn.disabled = true; // Lock previous mic
+    if (currentBtn) currentBtn.disabled = true;
     if (currentTimerDiv) currentTimerDiv.textContent = "";
 
     const nextSerial = currentSerial + 1;
@@ -620,7 +597,6 @@ function advanceToNextMic(currentSerial) {
     }
 }
 
-// LEVEL 2 SPEECH BOX EVALUATION (5-Second Timeout & Sequential Lock)
 function testSpeechBox(targetWord, serialNum) {
     if (!gameActive) {
         alert("Please press Start Game first!");
@@ -707,7 +683,6 @@ function testSpeechBox(targetWord, serialNum) {
     }, 1000);
 }
 
-// SUBMIT DATA TO GOOGLE SHEET & SHOW SCORE
 function submitData() {
     const name = document.getElementById("userName").value.trim();
     const emis = document.getElementById("userEMIS").value.trim();
@@ -721,19 +696,14 @@ function submitData() {
         return;
     }
 
-    // Stop Timers and Scoring
     clearInterval(timerInterval);
     if (boxTimerInterval) clearInterval(boxTimerInterval);
     gameActive = false;
 
-    // Display Score on screen after submission
     document.getElementById("scoreDisplay").style.display = "block";
-
-    // Enable Reset button for same user replay
     document.getElementById("submitBtn").disabled = true;
     document.getElementById("resetBtn").disabled = false;
 
-    // Apps Script Endpoint targeting Google Sheet ID: 1wvXXEzZkSj0MiaPHsjgbZATWEBuPUi3zUynB8yJmrPk
     const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
 
     const payload = {
@@ -760,7 +730,6 @@ function submitData() {
     });
 }
 
-// RESET FOR SAME USER REPLAY
 function resetSameUser() {
     clearInterval(timerInterval);
     if (boxTimerInterval) clearInterval(boxTimerInterval);
@@ -787,27 +756,82 @@ function resetSameUser() {
     initGame();
 }
 
-// PROVEN TTS ENGINE
+/* ROBUST 4-TIER MULTI-SOURCE TTS ENGINE (Fixed for Acer Smartboards) */
 function speakText(text, onComplete) {
     stopSmartTTS();
     const currentId = ++ttsId;
-    const audioUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=en&client=tw-ob";
-    ttsAudio = new Audio(audioUrl);
     
-    ttsAudio.onended = () => { if (onComplete) onComplete(); };
-    ttsAudio.onerror = () => { fallbackBrowserTTS(text, onComplete); };
-    
-    ttsAudio.play().catch(() => fallbackBrowserTTS(text, onComplete));
+    // Tier 1: StreamElements TTS API
+    const seUrl = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
+    ttsAudio = new Audio(seUrl);
+
+    let triedGoogle = false;
+    let triedBrowser = false;
+    let triedChime = false;
+
+    ttsAudio.onended = () => { if (currentId === ttsId && onComplete) onComplete(); };
+    ttsAudio.onerror = () => {
+        if (currentId !== ttsId) return;
+        if (!triedGoogle) {
+            triedGoogle = true;
+            // Tier 2: Google Translate TTS
+            const googleUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=en&client=tw-ob";
+            ttsAudio = new Audio(googleUrl);
+            ttsAudio.onended = () => { if (currentId === ttsId && onComplete) onComplete(); };
+            ttsAudio.onerror = () => fallbackBrowserTTS(text, currentId, onComplete);
+            ttsAudio.play().catch(() => fallbackBrowserTTS(text, currentId, onComplete));
+        } else {
+            fallbackBrowserTTS(text, currentId, onComplete);
+        }
+    };
+
+    ttsAudio.play().catch(() => {
+        if (currentId !== ttsId) return;
+        // Tier 2 Fallback directly if play() is rejected
+        const googleUrl = "https://translate.google.com/translate_tts?ie=UTF-8&q=" + encodeURIComponent(text) + "&tl=en&client=tw-ob";
+        ttsAudio = new Audio(googleUrl);
+        ttsAudio.onended = () => { if (currentId === ttsId && onComplete) onComplete(); };
+        ttsAudio.onerror = () => fallbackBrowserTTS(text, currentId, onComplete);
+        ttsAudio.play().catch(() => fallbackBrowserTTS(text, currentId, onComplete));
+    });
 }
 
-function fallbackBrowserTTS(text, onComplete) {
-    if (!("speechSynthesis" in window)) { if (onComplete) onComplete(); return; }
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-IN";
-    utterance.onend = () => { if (onComplete) onComplete(); };
-    utterance.onerror = () => { if (onComplete) onComplete(); };
-    window.speechSynthesis.speak(utterance);
+function fallbackBrowserTTS(text, currentId, onComplete) {
+    if (currentId !== ttsId) return;
+
+    if ("speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined") {
+        try {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = "en-IN";
+            utterance.onend = () => { if (currentId === ttsId && onComplete) onComplete(); };
+            utterance.onerror = () => { playChimeFallback(onComplete); };
+            window.speechSynthesis.speak(utterance);
+            return;
+        } catch(e) {}
+    }
+    playChimeFallback(onComplete);
+}
+
+// Tier 4: Web Audio API tone/chime fallback for offline smartboards with missing TTS
+function playChimeFallback(onComplete) {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5 note
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.4);
+        }
+    } catch(e) {}
+    if (onComplete) onComplete();
 }
 
 function stopSmartTTS() {
@@ -821,7 +845,6 @@ function stopSmartTTS() {
     }
 }
 
-// Initialize on page load
 window.onload = initGame;
 </script>
 
