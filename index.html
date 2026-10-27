@@ -283,8 +283,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
         <span class="marquee-text">Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!</span>
     </div>
     <div class="toolbar-controls">
-        <button class="toolbar-btn btn-green" id="ttsToggleBtn" onclick="toggleToolbarTTS()">🔊 Check TTS!</button>
-        <button class="toolbar-btn btn-blue" id="micToggleBtn" onclick="toggleToolbarMic()">🎙️ Check Mic!</button>
+        <button class="toolbar-btn btn-green" id="ttsToggleBtn" onclick="testToolbarTTS()">🔊 Check TTS!</button>
+        <button class="toolbar-btn btn-blue" id="micToggleBtn" onclick="testToolbarMic()">🎙️ Check Mic!</button>
         <div class="user-said-box" id="userSaidDisplay">You said: ...</div>
     </div>
 </div>
@@ -351,8 +351,7 @@ let secondsElapsed = 0;
 let gameActive = false;
 let ttsAudio = null;
 let ttsId = 0;
-let isTTSSpeaking = false;
-let isMicListening = false;
+let isToolbarSpeaking = false;
 
 let level1Score = 0;
 let level2Score = 0;
@@ -365,71 +364,76 @@ let recognition = null;
 let draggedCard = null;
 let boxTimerInterval = null;
 
-// TOP TOOLBAR TOGGLE FUNCTIONS
-function toggleToolbarTTS() {
+// ROBUST TOOLBAR TTS TESTER WITH STOP TOGGLE
+function testToolbarTTS() {
     const ttsBtn = document.getElementById("ttsToggleBtn");
-    if (!isTTSSpeaking) {
-        isTTSSpeaking = true;
-        ttsBtn.textContent = "🔇 Stop TTS!";
-        ttsBtn.className = "toolbar-btn btn-red";
-        speakText("Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!", () => {
-            isTTSSpeaking = false;
-            ttsBtn.textContent = "🔊 Check TTS!";
-            ttsBtn.className = "toolbar-btn btn-green";
-        });
-    } else {
+    
+    if (isToolbarSpeaking) {
         stopSmartTTS();
-        isTTSSpeaking = false;
+        isToolbarSpeaking = false;
         ttsBtn.textContent = "🔊 Check TTS!";
         ttsBtn.className = "toolbar-btn btn-green";
-    }
-}
-
-function toggleToolbarMic() {
-    const micBtn = document.getElementById("micToggleBtn");
-    if (!SpeechRecognition) {
-        alert("Speech Recognition not supported on this browser.");
         return;
     }
 
-    if (!isMicListening) {
-        try {
-            if (recognition) recognition.abort();
-            recognition = new SpeechRecognition();
-            recognition.lang = "en-IN";
-            
-            isMicListening = true;
-            micBtn.textContent = "⏹️ Stop Mic!";
-            micBtn.className = "toolbar-btn btn-red";
-            document.getElementById("userSaidDisplay").textContent = "You said: Listening...";
+    isToolbarSpeaking = true;
+    ttsBtn.textContent = "🔇 Stop TTS!";
+    ttsBtn.className = "toolbar-btn btn-red";
+    
+    speakText("Panchayat Union Primary School, Anjalam Melur, welcomes you!", () => {
+        isToolbarSpeaking = false;
+        ttsBtn.textContent = "🔊 Check TTS!";
+        ttsBtn.className = "toolbar-btn btn-green";
+    });
+}
 
-            recognition.onresult = (event) => {
-                const spoken = event.results[0][0].transcript.trim();
-                document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
-                stopToolbarMicState();
-            };
+// DIRECT TOOLBAR MIC TESTER
+function testToolbarMic() {
+    const micBtn = document.getElementById("micToggleBtn");
+    if (!SpeechRecognition) {
+        alert("Speech Recognition not supported on this browser or Smartboard.");
+        return;
+    }
 
-            recognition.onerror = () => stopToolbarMicState();
-            recognition.onend = () => stopToolbarMicState();
+    try {
+        if (recognition) recognition.abort();
+        recognition = new SpeechRecognition();
+        recognition.lang = "en-IN";
+        recognition.interimResults = false;
 
-            recognition.start();
-        } catch(err) {
-            stopToolbarMicState();
-        }
-    } else {
-        if (recognition) try { recognition.abort(); } catch(e){}
-        stopToolbarMicState();
+        micBtn.textContent = "🎙️ Listening...";
+        micBtn.className = "toolbar-btn btn-red";
+        document.getElementById("userSaidDisplay").textContent = "You said: Say something...";
+
+        recognition.onresult = (event) => {
+            const spoken = event.results[0][0].transcript.trim();
+            document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
+            resetMicButtonState();
+        };
+
+        recognition.onerror = () => {
+            document.getElementById("userSaidDisplay").textContent = "You said: Mic Error/Timeout";
+            resetMicButtonState();
+        };
+
+        recognition.onend = () => {
+            resetMicButtonState();
+        };
+
+        recognition.start();
+    } catch(err) {
+        alert("Microphone activation error: " + err.message);
+        resetMicButtonState();
     }
 }
 
-function stopToolbarMicState() {
-    isMicListening = false;
+function resetMicButtonState() {
     const micBtn = document.getElementById("micToggleBtn");
     micBtn.textContent = "🎙️ Check Mic!";
     micBtn.className = "toolbar-btn btn-blue";
 }
 
-// 3 ROUNDS SEQUENTIAL LISTEN — wait for each word to finish
+// 3 ROUNDS SEQUENTIAL LISTEN (3 SECONDS DELAY PER SPEAKER)
 async function listen3RoundsSequence() {
     const name = document.getElementById("userName").value.trim();
     if (!name) {
@@ -440,44 +444,24 @@ async function listen3RoundsSequence() {
     const listenBtn = document.getElementById("listenBtn");
     listenBtn.disabled = true;
     listenBtn.classList.remove("btn-blink");
+
     const cards = document.querySelectorAll(".icon-only-card");
 
-    try {
-        for (let round = 1; round <= 3; round++) {
-            for (let i = 0; i < targetWords.length; i++) {
-                const card = cards[i];
-                if (card) card.classList.add("icon-blink");
-                await speakTextAsync(targetWords[i]);
-                if (card) card.classList.remove("icon-blink");
-                // Short pause between words, after the previous word has finished.
-                await new Promise(resolve => setTimeout(resolve, 350));
-            }
+    for (let round = 1; round <= 3; round++) {
+        for (let i = 0; i < targetWords.length; i++) {
+            const word = targetWords[i];
+            const card = cards[i];
+
+            if (card) card.classList.add("icon-blink");
+            speakText(word);
+            
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            if (card) card.classList.remove("icon-blink");
         }
-        document.getElementById("startBtn").disabled = false;
-    } finally {
-        cards.forEach(card => card.classList.remove("icon-blink"));
-        listenBtn.disabled = false;
     }
-}
 
-function speakTextAsync(text) {
-    return new Promise(resolve => {
-        let settled = false;
-        // Never let an unavailable speech engine freeze the listening sequence.
-        const safetyTimer = setTimeout(() => {
-            if (!settled) {
-                settled = true;
-                resolve();
-            }
-        }, 9000);
-
-        speakText(text, () => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(safetyTimer);
-            resolve();
-        });
-    });
+    document.getElementById("startBtn").disabled = false;
 }
 
 // GAME INITIALIZATION
@@ -727,7 +711,7 @@ function testSpeechBox(targetWord, serialNum) {
     }, 1000);
 }
 
-// SUBMIT DATA TO GOOGLE SHEET & SHOW SCORE
+// UNIVERSAL SUBMISSION (FETCH WITH HIDDEN IFRAME FORM FALLBACK)
 function submitData() {
     const name = document.getElementById("userName").value.trim();
     const emis = document.getElementById("userEMIS").value.trim();
@@ -753,8 +737,8 @@ function submitData() {
     document.getElementById("submitBtn").disabled = true;
     document.getElementById("resetBtn").disabled = false;
 
-    // Web App URL from Google Apps Script Deployment
-    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbwgIQck2DLMYoDq5aEC8ZjGlnoAcqDKEShZou8lyTuWcVwZgu5PGOzQTQtbeXG2k8RU/exec"; 
+    // Replace with your Google Apps Script Web App URL
+    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
 
     const payload = {
         name: name,
@@ -768,16 +752,49 @@ function submitData() {
         timestamp: new Date().toISOString()
     };
 
-    fetch(sheetAppScriptUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    }).then(() => {
-        alert(`Submitted Successfully!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
-    }).catch(() => {
-        alert(`Submitted!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
-    });
+    try {
+        fetch(sheetAppScriptUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify(payload)
+        }).then(() => {
+            alert(`Submitted Successfully!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
+        }).catch(() => {
+            submitViaHiddenForm(sheetAppScriptUrl, payload, finalScore, percentage, timeTaken);
+        });
+    } catch (e) {
+        submitViaHiddenForm(sheetAppScriptUrl, payload, finalScore, percentage, timeTaken);
+    }
+}
+
+// Hidden Form Fallback Routine for Smartboards with strict CORS/Fetch restrictions
+function submitViaHiddenForm(url, payload, finalScore, percentage, timeTaken) {
+    let iframe = document.getElementById("hidden_iframe");
+    if (!iframe) {
+        iframe = document.createElement("iframe");
+        iframe.id = "hidden_iframe";
+        iframe.name = "hidden_iframe";
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+    }
+
+    let form = document.createElement("form");
+    form.method = "POST";
+    form.action = url;
+    form.target = "hidden_iframe";
+
+    let input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "postData";
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+
+    alert(`Submitted Successfully!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
 }
 
 // RESET FOR SAME USER REPLAY
@@ -807,190 +824,52 @@ function resetSameUser() {
     initGame();
 }
 
-// CROSS-DEVICE TTS
-// Prefer the browser/device speech engine. If it errors or never starts,
-// try Google Translate audio, then StreamElements audio as a final fallback.
-let ttsWatchdog = null;
-let ttsFinishedCallback = null;
-let ttsFallbackAttempt = 0;
-
+// UNLOCKED AUDIO & SMARTBOARD COMPATIBLE TTS ENGINE
 function speakText(text, onComplete) {
     stopSmartTTS();
     const currentId = ++ttsId;
-    ttsFinishedCallback = onComplete || null;
-    ttsFallbackAttempt = 0;
-
-    const clearWatchdog = () => {
-        if (ttsWatchdog) {
-            clearTimeout(ttsWatchdog);
-            ttsWatchdog = null;
-        }
-    };
+    let finished = false;
 
     const finish = () => {
-        if (currentId !== ttsId) return;
-        clearWatchdog();
-        const cb = ttsFinishedCallback;
-        ttsFinishedCallback = null;
-        if (typeof cb === "function") cb();
+        if (finished || currentId !== ttsId) return;
+        finished = true;
+        if (typeof onComplete === "function") onComplete();
     };
 
-    const playOnlineAudio = (provider) => {
+    const watchdog = setTimeout(finish, 4000);
+
+    const safeFinish = () => {
+        clearTimeout(watchdog);
+        finish();
+    };
+
+    const audio = new Audio();
+    ttsAudio = audio;
+    audio.preload = "auto";
+    audio.volume = 1.0;
+    
+    audio.onended = safeFinish;
+    audio.onerror = () => {
         if (currentId !== ttsId) return;
-        clearWatchdog();
+        audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
+        audio.onerror = safeFinish;
+        audio.play().catch(safeFinish);
+    };
 
-        // Stop any previous audio without cancelling this request.
-        if (ttsAudio) {
-            try {
-                ttsAudio.onended = null;
-                ttsAudio.onerror = null;
-                ttsAudio.pause();
-                ttsAudio.src = "";
-            } catch (e) {}
-        }
+    audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
 
-        const audio = new Audio();
-        ttsAudio = audio;
-        audio.preload = "auto";
-        audio.volume = 1;
-        audio.onended = finish;
-        audio.onerror = () => {
-            if (currentId !== ttsId) return;
-            if (provider === "google") {
-                playOnlineAudio("stream");
-            } else {
-                showTTSDiagnostic();
-                finish();
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+        playPromise.catch(() => {
+            if (currentId === ttsId) {
+                audio.onerror();
             }
-        };
-
-        if (provider === "google") {
-            audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
-        } else {
-            audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
-        }
-
-        // Audio playback may be blocked by browser policy. Catch it and move
-        // to the next available method instead of silently failing.
-        let playPromise;
-        try {
-            playPromise = audio.play();
-        } catch (e) {
-            if (provider === "google") playOnlineAudio("stream");
-            else { showTTSDiagnostic(); finish(); }
-            return;
-        }
-        if (playPromise && typeof playPromise.catch === "function") {
-            playPromise.catch(() => {
-                if (currentId !== ttsId) return;
-                if (provider === "google") playOnlineAudio("stream");
-                else { showTTSDiagnostic(); finish(); }
-            });
-        }
-        ttsWatchdog = setTimeout(() => {
-            if (currentId !== ttsId) return;
-            if (audio.paused || audio.currentTime === 0) {
-                if (provider === "google") playOnlineAudio("stream");
-                else { showTTSDiagnostic(); finish(); }
-            }
-        }, 5000);
-    };
-
-    const tryDeviceSpeech = () => {
-        if (currentId !== ttsId) return;
-        clearWatchdog();
-
-        if (ttsAudio) {
-            try {
-                ttsAudio.onended = null;
-                ttsAudio.onerror = null;
-                ttsAudio.pause();
-                ttsAudio.src = "";
-            } catch (e) {}
-            ttsAudio = null;
-        }
-
-        if (!("speechSynthesis" in window) ||
-            typeof SpeechSynthesisUtterance === "undefined") {
-            playOnlineAudio("google");
-            return;
-        }
-
-        try {
-            const synth = window.speechSynthesis;
-            synth.cancel();
-
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = "en-IN";
-            utterance.rate = 0.9;
-            utterance.pitch = 1;
-            utterance.volume = 1;
-
-            let started = false;
-            let completed = false;
-
-            utterance.onstart = () => {
-                if (currentId !== ttsId) return;
-                started = true;
-                clearWatchdog();
-            };
-            utterance.onend = () => {
-                if (currentId !== ttsId || completed) return;
-                completed = true;
-                finish();
-            };
-            utterance.onerror = () => {
-                if (currentId !== ttsId || completed) return;
-                completed = true;
-                playOnlineAudio("google");
-            };
-
-            // Some Chromium-based devices need cancel() followed by a short
-            // delay before speechSynthesis.speak() will start reliably.
-            setTimeout(() => {
-                if (currentId !== ttsId) return;
-                try {
-                    synth.speak(utterance);
-                    ttsWatchdog = setTimeout(() => {
-                        if (currentId !== ttsId || completed) return;
-                        if (!started) {
-                            completed = true;
-                            playOnlineAudio("google");
-                        }
-                    }, 3000);
-                } catch (e) {
-                    playOnlineAudio("google");
-                }
-            }, 100);
-        } catch (e) {
-            playOnlineAudio("google");
-        }
-    };
-
-    tryDeviceSpeech();
-}
-
-function showTTSDiagnostic() {
-    let el = document.getElementById("ttsDiagnostic");
-    if (!el) {
-        el = document.createElement("div");
-        el.id = "ttsDiagnostic";
-        el.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;background:#7f1d1d;color:white;padding:14px;border-radius:8px;font:16px system-ui;";
-        document.body.appendChild(el);
+        });
     }
-    el.textContent = "TTS could not start. Check internet access, media volume, and browser audio permissions. Try tapping Check TTS once first.";
-    el.style.display = "block";
-    setTimeout(() => { if (el) el.style.display = "none"; }, 9000);
 }
 
 function stopSmartTTS() {
     ttsId++;
-    if (ttsWatchdog) {
-        clearTimeout(ttsWatchdog);
-        ttsWatchdog = null;
-    }
-    ttsFinishedCallback = null;
-
     if (ttsAudio) {
         try {
             ttsAudio.onended = null;
@@ -1000,10 +879,6 @@ function stopSmartTTS() {
             ttsAudio.src = "";
         } catch (e) {}
         ttsAudio = null;
-    }
-
-    if ("speechSynthesis" in window) {
-        try { window.speechSynthesis.cancel(); } catch (e) {}
     }
 }
 
