@@ -825,7 +825,7 @@ function resetSameUser() {
     initGame();
 }
 
-// BULLETPROOF TTS ENGINE WITH SAFETY WATCHDOG TIMER
+// BULLETPROOF GITHUB & SMARTBOARD COMPATIBLE TTS ENGINE WITH ONLINE AUDIO PRIORITY
 function speakText(text, onComplete) {
     stopSmartTTS();
     const currentId = ++ttsId;
@@ -837,61 +837,59 @@ function speakText(text, onComplete) {
         if (typeof onComplete === "function") onComplete();
     };
 
-    // Safety Watchdog: Forces completion after 5 seconds if browser hangs
-    const watchdog = setTimeout(finish, 5000);
+    const watchdog = setTimeout(finish, 4000);
 
     const safeFinish = () => {
         clearTimeout(watchdog);
         finish();
     };
 
-    if ("speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined") {
-        try {
-            const synth = window.speechSynthesis;
-            synth.cancel();
-            
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = "en-IN";
-            utterance.rate = 0.9;
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-
-            activeUtterance = utterance;
-
-            utterance.onend = safeFinish;
-            utterance.onerror = () => {
-                if (currentId === ttsId) tryOnlineTTS(text, currentId, safeFinish);
-            };
-
-            synth.speak(utterance);
-            return;
-        } catch (e) {
-            tryOnlineTTS(text, currentId, safeFinish);
-        }
-    } else {
-        tryOnlineTTS(text, currentId, safeFinish);
-    }
-}
-
-function tryOnlineTTS(text, currentId, finish) {
-    if (currentId !== ttsId) return;
-    
+    // Prioritize reliable online audio streams first (StreamElements -> Google Translate -> Device Speech)
     const audio = new Audio();
     ttsAudio = audio;
     audio.preload = "auto";
     audio.volume = 1;
-    audio.onended = finish;
+    audio.onended = safeFinish;
     audio.onerror = () => {
         if (currentId !== ttsId) return;
+        // Fallback to Google Translate TTS
         audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
-        audio.onerror = finish;
-        audio.play().catch(finish);
+        audio.onerror = () => {
+            if (currentId !== ttsId) return;
+            // Final fallback to device speech synthesis
+            tryDeviceSpeech(text, currentId, safeFinish);
+        };
+        audio.play().catch(() => tryDeviceSpeech(text, currentId, safeFinish));
     };
     audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
-    
+
     audio.play().catch(() => {
-        if (currentId === ttsId) finish();
+        if (currentId === ttsId) {
+            audio.onerror();
+        }
     });
+}
+
+function tryDeviceSpeech(text, currentId, finish) {
+    if (currentId !== ttsId) return;
+    if ("speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined") {
+        try {
+            const synth = window.speechSynthesis;
+            synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = "en-IN";
+            utterance.rate = 0.9;
+            utterance.onend = finish;
+            utterance.onerror = finish;
+            activeUtterance = utterance;
+            synth.speak(utterance);
+            return;
+        } catch (e) {
+            finish();
+        }
+    } else {
+        finish();
+    }
 }
 
 function stopSmartTTS() {
