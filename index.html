@@ -707,7 +707,7 @@ function testSpeechBox(targetWord, serialNum) {
     }, 1000);
 }
 
-// SUBMIT DATA TO GOOGLE SHEET & SHOW SCORE
+// UNIVERSAL SUBMISSION (FETCH WITH HIDDEN IFRAME FORM FALLBACK)
 function submitData() {
     const name = document.getElementById("userName").value.trim();
     const emis = document.getElementById("userEMIS").value.trim();
@@ -733,8 +733,8 @@ function submitData() {
     document.getElementById("submitBtn").disabled = true;
     document.getElementById("resetBtn").disabled = false;
 
-    // Web App URL from Google Apps Script Deployment
-    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbwgIQck2DLMYoDq5aEC8ZjGlnoAcqDKEShZou8lyTuWcVwZgu5PGOzQTQtbeXG2k8RU/exec"; 
+    // Replace with your Google Apps Script Web App URL
+    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
 
     const payload = {
         name: name,
@@ -748,16 +748,49 @@ function submitData() {
         timestamp: new Date().toISOString()
     };
 
-    fetch(sheetAppScriptUrl, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    }).then(() => {
-        alert(`Submitted Successfully!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
-    }).catch(() => {
-        alert(`Submitted!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
-    });
+    try {
+        fetch(sheetAppScriptUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "text/plain" },
+            body: JSON.stringify(payload)
+        }).then(() => {
+            alert(`Submitted Successfully!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
+        }).catch(() => {
+            submitViaHiddenForm(sheetAppScriptUrl, payload, finalScore, percentage, timeTaken);
+        });
+    } catch (e) {
+        submitViaHiddenForm(sheetAppScriptUrl, payload, finalScore, percentage, timeTaken);
+    }
+}
+
+// Hidden Form Fallback Routine for Smartboards with strict CORS/Fetch restrictions
+function submitViaHiddenForm(url, payload, finalScore, percentage, timeTaken) {
+    let iframe = document.getElementById("hidden_iframe");
+    if (!iframe) {
+        iframe = document.createElement("iframe");
+        iframe.id = "hidden_iframe";
+        iframe.name = "hidden_iframe";
+        iframe.style.display = "none";
+        document.body.appendChild(iframe);
+    }
+
+    let form = document.createElement("form");
+    form.method = "POST";
+    form.action = url;
+    form.target = "hidden_iframe";
+
+    let input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "postData";
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+
+    alert(`Submitted Successfully!\nScore: ${finalScore}/20 (${percentage}%)\nTime: ${timeTaken}`);
 }
 
 // RESET FOR SAME USER REPLAY
@@ -787,7 +820,7 @@ function resetSameUser() {
     initGame();
 }
 
-// ACER-COMPATIBLE TTS
+// ROBUST ACER SMARTBOARD COMPATIBLE TTS ENGINE
 let ttsWatchdog = null;
 let ttsFinishedCallback = null;
 
@@ -808,45 +841,11 @@ function speakText(text, onComplete) {
         if (ttsWatchdog) { clearTimeout(ttsWatchdog); ttsWatchdog = null; }
     };
 
-    const trySecondOnline = () => {
-        if (currentId !== ttsId) return;
-        clearWatchdog();
-        const audio = new Audio();
-        ttsAudio = audio;
-        audio.preload = "auto";
-        audio.volume = 1;
-        audio.onended = finish;
-        audio.onerror = () => {
-            if (currentId !== ttsId) return;
-            ttsAudio = null;
-            showTTSDiagnostic();
-            finish();
-        };
-        audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
-        const p = audio.play();
-        if (p && p.catch) p.catch(() => {
-            if (currentId !== ttsId) return;
-            ttsAudio = null;
-            showTTSDiagnostic();
-            finish();
-        });
-    };
-
     const tryDeviceSpeech = () => {
         if (currentId !== ttsId) return;
         clearWatchdog();
-        if (ttsAudio) {
-            try {
-                ttsAudio.onended = null;
-                ttsAudio.onerror = null;
-                ttsAudio.pause();
-                ttsAudio.src = "";
-            } catch (e) {}
-            ttsAudio = null;
-        }
-
         if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
-            trySecondOnline();
+            finish();
             return;
         }
 
@@ -857,22 +856,29 @@ function speakText(text, onComplete) {
             utterance.lang = "en-IN";
             utterance.rate = 0.9;
             utterance.volume = 1;
-            let started = false;
-            utterance.onstart = () => {
-                if (currentId === ttsId) { started = true; clearWatchdog(); }
-            };
             utterance.onend = finish;
-            utterance.onerror = () => {
-                if (currentId === ttsId) trySecondOnline();
-            };
+            utterance.onerror = finish;
             synth.speak(utterance);
-
-            ttsWatchdog = setTimeout(() => {
-                if (currentId === ttsId && !started) trySecondOnline();
-            }, 3500);
         } catch (e) {
-            trySecondOnline();
+            finish();
         }
+    };
+
+    const trySecondOnline = () => {
+        if (currentId !== ttsId) return;
+        clearWatchdog();
+        const audio = new Audio();
+        ttsAudio = audio;
+        audio.preload = "auto";
+        audio.volume = 1;
+        audio.onended = finish;
+        audio.onerror = tryDeviceSpeech;
+        audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
+        
+        const p = audio.play();
+        if (p && p.catch) p.catch(() => {
+            if (currentId !== ttsId) tryDeviceSpeech();
+        });
     };
 
     const audio = new Audio();
@@ -881,30 +887,17 @@ function speakText(text, onComplete) {
     audio.volume = 1;
     audio.onplaying = () => clearWatchdog();
     audio.onended = finish;
-    audio.onerror = () => { if (currentId === ttsId) tryDeviceSpeech(); };
+    audio.onerror = () => { if (currentId === ttsId) trySecondOnline(); };
     audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
 
     const p = audio.play();
     if (p && p.catch) p.catch(() => {
-        if (currentId === ttsId) tryDeviceSpeech();
+        if (currentId === ttsId) trySecondOnline();
     });
 
     ttsWatchdog = setTimeout(() => {
-        if (currentId === ttsId && audio.paused) tryDeviceSpeech();
+        if (currentId === ttsId && audio.paused) trySecondOnline();
     }, 3500);
-}
-
-function showTTSDiagnostic() {
-    let el = document.getElementById("ttsDiagnostic");
-    if (!el) {
-        el = document.createElement("div");
-        el.id = "ttsDiagnostic";
-        el.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;background:#7f1d1d;color:white;padding:14px;border-radius:8px;font:16px system-ui;";
-        document.body.appendChild(el);
-    }
-    el.textContent = "TTS could not start. Check Smart Board media volume, internet access and browser audio permissions.";
-    el.style.display = "block";
-    setTimeout(() => { if (el) el.style.display = "none"; }, 9000);
 }
 
 function stopSmartTTS() {
