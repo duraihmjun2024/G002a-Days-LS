@@ -352,6 +352,7 @@ let gameActive = false;
 let ttsAudio = null;
 let ttsId = 0;
 let activeUtterance = null;
+let isToolbarSpeaking = false;
 
 let level1Score = 0;
 let level2Score = 0;
@@ -364,13 +365,24 @@ let recognition = null;
 let draggedCard = null;
 let boxTimerInterval = null;
 
-// DIRECT TOOLBAR TTS TESTER
+// ROBUST TOOLBAR TTS TESTER WITH STOP TOGGLE
 function testToolbarTTS() {
     const ttsBtn = document.getElementById("ttsToggleBtn");
-    ttsBtn.textContent = "🔊 Speaking...";
-    ttsBtn.className = "toolbar-btn btn-orange";
+    
+    if (isToolbarSpeaking) {
+        stopSmartTTS();
+        isToolbarSpeaking = false;
+        ttsBtn.textContent = "🔊 Check TTS!";
+        ttsBtn.className = "toolbar-btn btn-green";
+        return;
+    }
+
+    isToolbarSpeaking = true;
+    ttsBtn.textContent = "🔇 Stop TTS!";
+    ttsBtn.className = "toolbar-btn btn-red";
     
     speakText("Panchayat Union Primary School, Anjalam Melur, welcomes you!", () => {
+        isToolbarSpeaking = false;
         ttsBtn.textContent = "🔊 Check TTS!";
         ttsBtn.className = "toolbar-btn btn-green";
     });
@@ -813,14 +825,24 @@ function resetSameUser() {
     initGame();
 }
 
-// ROBUST GITHUB & SMARTBOARD COMPATIBLE TTS ENGINE
+// BULLETPROOF TTS ENGINE WITH SAFETY WATCHDOG TIMER
 function speakText(text, onComplete) {
     stopSmartTTS();
     const currentId = ++ttsId;
+    let finished = false;
 
     const finish = () => {
-        if (currentId !== ttsId) return;
+        if (finished || currentId !== ttsId) return;
+        finished = true;
         if (typeof onComplete === "function") onComplete();
+    };
+
+    // Safety Watchdog: Forces completion after 5 seconds if browser hangs
+    const watchdog = setTimeout(finish, 5000);
+
+    const safeFinish = () => {
+        clearTimeout(watchdog);
+        finish();
     };
 
     if ("speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined") {
@@ -836,20 +858,18 @@ function speakText(text, onComplete) {
 
             activeUtterance = utterance;
 
-            utterance.onend = () => {
-                if (currentId === ttsId) finish();
-            };
+            utterance.onend = safeFinish;
             utterance.onerror = () => {
-                if (currentId === ttsId) tryOnlineTTS(text, currentId, finish);
+                if (currentId === ttsId) tryOnlineTTS(text, currentId, safeFinish);
             };
 
             synth.speak(utterance);
             return;
         } catch (e) {
-            tryOnlineTTS(text, currentId, finish);
+            tryOnlineTTS(text, currentId, safeFinish);
         }
     } else {
-        tryOnlineTTS(text, currentId, finish);
+        tryOnlineTTS(text, currentId, safeFinish);
     }
 }
 
