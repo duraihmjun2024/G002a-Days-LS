@@ -349,9 +349,9 @@ const targetWords = ["Days", "Seven", "Sunday", "Monday", "Tuesday", "Wednesday"
 let timerInterval = null;
 let secondsElapsed = 0;
 let gameActive = false;
-let ttsAudio = null;
 let ttsId = 0;
 let isToolbarSpeaking = false;
+let activeUtterance = null;
 
 let level1Score = 0;
 let level2Score = 0;
@@ -824,7 +824,7 @@ function resetSameUser() {
     initGame();
 }
 
-// UNLOCKED AUDIO & SMARTBOARD COMPATIBLE TTS ENGINE
+// UNLOCKED SMARTBOARD & GITHUB COMPATIBLE TTS ENGINE
 function speakText(text, onComplete) {
     stopSmartTTS();
     const currentId = ++ttsId;
@@ -836,50 +836,60 @@ function speakText(text, onComplete) {
         if (typeof onComplete === "function") onComplete();
     };
 
-    const watchdog = setTimeout(finish, 4000);
+    const watchdog = setTimeout(finish, 5000);
 
     const safeFinish = () => {
         clearTimeout(watchdog);
         finish();
     };
 
-    const audio = new Audio();
-    ttsAudio = audio;
-    audio.preload = "auto";
-    audio.volume = 1.0;
-    
-    audio.onended = safeFinish;
-    audio.onerror = () => {
-        if (currentId !== ttsId) return;
-        audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
-        audio.onerror = safeFinish;
-        audio.play().catch(safeFinish);
-    };
+    if (!("speechSynthesis" in window)) {
+        safeFinish();
+        return;
+    }
 
-    audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
+    try {
+        const synth = window.speechSynthesis;
+        synth.cancel();
 
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-        playPromise.catch(() => {
-            if (currentId === ttsId) {
-                audio.onerror();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-IN";
+        utterance.rate = 0.9;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        // Hook into device voices explicitly for WebView / Smartboard compatibility
+        const voices = synth.getVoices();
+        const matchingVoice = voices.find(v => v.lang === "en-IN" || v.lang.startsWith("en"));
+        if (matchingVoice) {
+            utterance.voice = matchingVoice;
+        }
+
+        activeUtterance = utterance;
+
+        utterance.onend = safeFinish;
+        utterance.onerror = safeFinish;
+
+        synth.speak(utterance);
+
+        // Fallback check if speech doesn't trigger within 500ms
+        setTimeout(() => {
+            if (!synth.speaking && !finished && currentId === ttsId) {
+                safeFinish();
             }
-        });
+        }, 500);
+
+    } catch (e) {
+        safeFinish();
     }
 }
 
 function stopSmartTTS() {
     ttsId++;
-    if (ttsAudio) {
-        try {
-            ttsAudio.onended = null;
-            ttsAudio.onerror = null;
-            ttsAudio.pause();
-            ttsAudio.currentTime = 0;
-            ttsAudio.src = "";
-        } catch (e) {}
-        ttsAudio = null;
+    if ("speechSynthesis" in window) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
     }
+    activeUtterance = null;
 }
 
 // Initialize on page load
