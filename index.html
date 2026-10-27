@@ -283,8 +283,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; animation: none; }
         <span class="marquee-text">Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!</span>
     </div>
     <div class="toolbar-controls">
-        <button class="toolbar-btn btn-green" id="ttsToggleBtn" onclick="toggleToolbarTTS()">🔊 Check TTS!</button>
-        <button class="toolbar-btn btn-blue" id="micToggleBtn" onclick="toggleToolbarMic()">🎙️ Check Mic!</button>
+        <button class="toolbar-btn btn-green" id="ttsToggleBtn" onclick="testToolbarTTS()">🔊 Check TTS!</button>
+        <button class="toolbar-btn btn-blue" id="micToggleBtn" onclick="testToolbarMic()">🎙️ Check Mic!</button>
         <div class="user-said-box" id="userSaidDisplay">You said: ...</div>
     </div>
 </div>
@@ -351,8 +351,7 @@ let secondsElapsed = 0;
 let gameActive = false;
 let ttsAudio = null;
 let ttsId = 0;
-let isTTSSpeaking = false;
-let isMicListening = false;
+let activeUtterance = null;
 
 let level1Score = 0;
 let level2Score = 0;
@@ -365,65 +364,59 @@ let recognition = null;
 let draggedCard = null;
 let boxTimerInterval = null;
 
-// TOP TOOLBAR TOGGLE FUNCTIONS
-function toggleToolbarTTS() {
+// DIRECT TOOLBAR TTS TESTER
+function testToolbarTTS() {
     const ttsBtn = document.getElementById("ttsToggleBtn");
-    if (!isTTSSpeaking) {
-        isTTSSpeaking = true;
-        ttsBtn.textContent = "🔇 Stop TTS!";
-        ttsBtn.className = "toolbar-btn btn-red";
-        speakText("Panchayat Union Primary School, Anjalam Melur, Trichy District, TamilNadu, India Welcomes You!", () => {
-            isTTSSpeaking = false;
-            ttsBtn.textContent = "🔊 Check TTS!";
-            ttsBtn.className = "toolbar-btn btn-green";
-        });
-    } else {
-        stopSmartTTS();
-        isTTSSpeaking = false;
+    ttsBtn.textContent = "🔊 Speaking...";
+    ttsBtn.className = "toolbar-btn btn-orange";
+    
+    speakText("Panchayat Union Primary School, Anjalam Melur, welcomes you!", () => {
         ttsBtn.textContent = "🔊 Check TTS!";
         ttsBtn.className = "toolbar-btn btn-green";
-    }
+    });
 }
 
-function toggleToolbarMic() {
+// DIRECT TOOLBAR MIC TESTER
+function testToolbarMic() {
     const micBtn = document.getElementById("micToggleBtn");
     if (!SpeechRecognition) {
-        alert("Speech Recognition not supported on this browser.");
+        alert("Speech Recognition not supported on this browser or Smartboard.");
         return;
     }
 
-    if (!isMicListening) {
-        try {
-            if (recognition) recognition.abort();
-            recognition = new SpeechRecognition();
-            recognition.lang = "en-IN";
-            
-            isMicListening = true;
-            micBtn.textContent = "⏹️ Stop Mic!";
-            micBtn.className = "toolbar-btn btn-red";
-            document.getElementById("userSaidDisplay").textContent = "You said: Listening...";
+    try {
+        if (recognition) recognition.abort();
+        recognition = new SpeechRecognition();
+        recognition.lang = "en-IN";
+        recognition.interimResults = false;
 
-            recognition.onresult = (event) => {
-                const spoken = event.results[0][0].transcript.trim();
-                document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
-                stopToolbarMicState();
-            };
+        micBtn.textContent = "🎙️ Listening...";
+        micBtn.className = "toolbar-btn btn-red";
+        document.getElementById("userSaidDisplay").textContent = "You said: Say something...";
 
-            recognition.onerror = () => stopToolbarMicState();
-            recognition.onend = () => stopToolbarMicState();
+        recognition.onresult = (event) => {
+            const spoken = event.results[0][0].transcript.trim();
+            document.getElementById("userSaidDisplay").textContent = `You said: "${spoken}"`;
+            resetMicButtonState();
+        };
 
-            recognition.start();
-        } catch(err) {
-            stopToolbarMicState();
-        }
-    } else {
-        if (recognition) try { recognition.abort(); } catch(e){}
-        stopToolbarMicState();
+        recognition.onerror = () => {
+            document.getElementById("userSaidDisplay").textContent = "You said: Mic Error/Timeout";
+            resetMicButtonState();
+        };
+
+        recognition.onend = () => {
+            resetMicButtonState();
+        };
+
+        recognition.start();
+    } catch(err) {
+        alert("Microphone activation error: " + err.message);
+        resetMicButtonState();
     }
 }
 
-function stopToolbarMicState() {
-    isMicListening = false;
+function resetMicButtonState() {
     const micBtn = document.getElementById("micToggleBtn");
     micBtn.textContent = "🎙️ Check Mic!";
     micBtn.className = "toolbar-btn btn-blue";
@@ -820,11 +813,7 @@ function resetSameUser() {
     initGame();
 }
 
-// BULLETPROOF GITHUB & SMARTBOARD COMPATIBLE TTS ENGINE
-let ttsId = 0;
-let ttsAudio = null;
-let activeUtterance = null;
-
+// ROBUST GITHUB & SMARTBOARD COMPATIBLE TTS ENGINE
 function speakText(text, onComplete) {
     stopSmartTTS();
     const currentId = ++ttsId;
@@ -834,7 +823,6 @@ function speakText(text, onComplete) {
         if (typeof onComplete === "function") onComplete();
     };
 
-    // 1. Primary: Browser-Native Speech Synthesis (100% CORS-free on GitHub Pages & Smartboards)
     if ("speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined") {
         try {
             const synth = window.speechSynthesis;
@@ -846,7 +834,6 @@ function speakText(text, onComplete) {
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
 
-            // Prevent garbage collection bug in browser engines
             activeUtterance = utterance;
 
             utterance.onend = () => {
@@ -869,7 +856,6 @@ function speakText(text, onComplete) {
 function tryOnlineTTS(text, currentId, finish) {
     if (currentId !== ttsId) return;
     
-    // Fallback 1: StreamElements API
     const audio = new Audio();
     ttsAudio = audio;
     audio.preload = "auto";
@@ -877,7 +863,6 @@ function tryOnlineTTS(text, currentId, finish) {
     audio.onended = finish;
     audio.onerror = () => {
         if (currentId !== ttsId) return;
-        // Fallback 2: Google Translate TTS
         audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
         audio.onerror = finish;
         audio.play().catch(finish);
