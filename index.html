@@ -820,90 +820,77 @@ function resetSameUser() {
     initGame();
 }
 
-// ROBUST ACER SMARTBOARD COMPATIBLE TTS ENGINE
-let ttsWatchdog = null;
-let ttsFinishedCallback = null;
+// BULLETPROOF GITHUB & SMARTBOARD COMPATIBLE TTS ENGINE
+let ttsId = 0;
+let ttsAudio = null;
+let activeUtterance = null;
 
 function speakText(text, onComplete) {
     stopSmartTTS();
     const currentId = ++ttsId;
-    ttsFinishedCallback = onComplete || null;
 
     const finish = () => {
         if (currentId !== ttsId) return;
-        if (ttsWatchdog) { clearTimeout(ttsWatchdog); ttsWatchdog = null; }
-        const cb = ttsFinishedCallback;
-        ttsFinishedCallback = null;
-        if (typeof cb === "function") cb();
+        if (typeof onComplete === "function") onComplete();
     };
 
-    const clearWatchdog = () => {
-        if (ttsWatchdog) { clearTimeout(ttsWatchdog); ttsWatchdog = null; }
-    };
-
-    const tryDeviceSpeech = () => {
-        if (currentId !== ttsId) return;
-        clearWatchdog();
-        if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
-            finish();
-            return;
-        }
-
+    // 1. Primary: Browser-Native Speech Synthesis (100% CORS-free on GitHub Pages & Smartboards)
+    if ("speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined") {
         try {
             const synth = window.speechSynthesis;
             synth.cancel();
+            
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = "en-IN";
             utterance.rate = 0.9;
-            utterance.volume = 1;
-            utterance.onend = finish;
-            utterance.onerror = finish;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            // Prevent garbage collection bug in browser engines
+            activeUtterance = utterance;
+
+            utterance.onend = () => {
+                if (currentId === ttsId) finish();
+            };
+            utterance.onerror = () => {
+                if (currentId === ttsId) tryOnlineTTS(text, currentId, finish);
+            };
+
             synth.speak(utterance);
+            return;
         } catch (e) {
-            finish();
+            tryOnlineTTS(text, currentId, finish);
         }
-    };
+    } else {
+        tryOnlineTTS(text, currentId, finish);
+    }
+}
 
-    const trySecondOnline = () => {
-        if (currentId !== ttsId) return;
-        clearWatchdog();
-        const audio = new Audio();
-        ttsAudio = audio;
-        audio.preload = "auto";
-        audio.volume = 1;
-        audio.onended = finish;
-        audio.onerror = tryDeviceSpeech;
-        audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
-        
-        const p = audio.play();
-        if (p && p.catch) p.catch(() => {
-            if (currentId !== ttsId) tryDeviceSpeech();
-        });
-    };
-
+function tryOnlineTTS(text, currentId, finish) {
+    if (currentId !== ttsId) return;
+    
+    // Fallback 1: StreamElements API
     const audio = new Audio();
     ttsAudio = audio;
     audio.preload = "auto";
     audio.volume = 1;
-    audio.onplaying = () => clearWatchdog();
     audio.onended = finish;
-    audio.onerror = () => { if (currentId === ttsId) trySecondOnline(); };
-    audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
-
-    const p = audio.play();
-    if (p && p.catch) p.catch(() => {
-        if (currentId === ttsId) trySecondOnline();
+    audio.onerror = () => {
+        if (currentId !== ttsId) return;
+        // Fallback 2: Google Translate TTS
+        audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
+        audio.onerror = finish;
+        audio.play().catch(finish);
+    };
+    audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
+    
+    audio.play().catch(() => {
+        if (currentId === ttsId) finish();
     });
-
-    ttsWatchdog = setTimeout(() => {
-        if (currentId === ttsId && audio.paused) trySecondOnline();
-    }, 3500);
 }
 
 function stopSmartTTS() {
     ttsId++;
-    if (ttsWatchdog) { clearTimeout(ttsWatchdog); ttsWatchdog = null; }
-    ttsFinishedCallback = null;
     if (ttsAudio) {
         try {
             ttsAudio.onended = null;
@@ -917,6 +904,7 @@ function stopSmartTTS() {
     if ("speechSynthesis" in window) {
         try { window.speechSynthesis.cancel(); } catch (e) {}
     }
+    activeUtterance = null;
 }
 
 // Initialize on page load
