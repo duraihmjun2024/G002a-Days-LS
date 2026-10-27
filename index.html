@@ -733,8 +733,8 @@ function submitData() {
     document.getElementById("submitBtn").disabled = true;
     document.getElementById("resetBtn").disabled = false;
 
-    // Apps Script Endpoint targeting Google Sheet ID: 1wvXXEzZkSj0MiaPHsjgbZATWEBuPUi3zUynB8yJmrPk
-    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbxYourScriptIDHere/exec"; 
+    // Web App URL from Google Apps Script Deployment
+    const sheetAppScriptUrl = "https://script.google.com/macros/s/AKfycbwgIQck2DLMYoDq5aEC8ZjGlnoAcqDKEShZou8lyTuWcVwZgu5PGOzQTQtbeXG2k8RU/exec"; 
 
     const payload = {
         name: name,
@@ -788,8 +788,6 @@ function resetSameUser() {
 }
 
 // ACER-COMPATIBLE TTS
-// Keeps the existing game and STT unchanged. Attempts online audio first,
-// then device speech, then a second online endpoint if available.
 let ttsWatchdog = null;
 let ttsFinishedCallback = null;
 
@@ -824,8 +822,7 @@ function speakText(text, onComplete) {
             showTTSDiagnostic();
             finish();
         };
-        audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" +
-                    encodeURIComponent(text);
+        audio.src = "https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=" + encodeURIComponent(text);
         const p = audio.play();
         if (p && p.catch) p.catch(() => {
             if (currentId !== ttsId) return;
@@ -848,8 +845,7 @@ function speakText(text, onComplete) {
             ttsAudio = null;
         }
 
-        if (!("speechSynthesis" in window) ||
-            typeof SpeechSynthesisUtterance === "undefined") {
+        if (!("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
             trySecondOnline();
             return;
         }
@@ -871,7 +867,6 @@ function speakText(text, onComplete) {
             };
             synth.speak(utterance);
 
-            // Recover from embedded browsers that never start the utterance.
             ttsWatchdog = setTimeout(() => {
                 if (currentId === ttsId && !started) trySecondOnline();
             }, 3500);
@@ -887,15 +882,13 @@ function speakText(text, onComplete) {
     audio.onplaying = () => clearWatchdog();
     audio.onended = finish;
     audio.onerror = () => { if (currentId === ttsId) tryDeviceSpeech(); };
-    audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" +
-                encodeURIComponent(text);
+    audio.src = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" + encodeURIComponent(text);
 
     const p = audio.play();
     if (p && p.catch) p.catch(() => {
         if (currentId === ttsId) tryDeviceSpeech();
     });
 
-    // Some WebViews neither start playback nor report an error.
     ttsWatchdog = setTimeout(() => {
         if (currentId === ttsId && audio.paused) tryDeviceSpeech();
     }, 3500);
@@ -906,11 +899,10 @@ function showTTSDiagnostic() {
     if (!el) {
         el = document.createElement("div");
         el.id = "ttsDiagnostic";
-        el.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;" +
-            "background:#7f1d1d;color:white;padding:14px;border-radius:8px;font:16px system-ui;";
+        el.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;background:#7f1d1d;color:white;padding:14px;border-radius:8px;font:16px system-ui;";
         document.body.appendChild(el);
     }
-    el.textContent = "TTS could not start. Check Smart Board media volume, internet access and browser audio permissions. Try opening this same page directly in Chrome.";
+    el.textContent = "TTS could not start. Check Smart Board media volume, internet access and browser audio permissions.";
     el.style.display = "block";
     setTimeout(() => { if (el) el.style.display = "none"; }, 9000);
 }
