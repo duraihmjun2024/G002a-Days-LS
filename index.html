@@ -896,5 +896,21 @@ function stopSmartTTS() {
 window.onload = initGame;
 </script>
 
+
+
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.service.worker.js")
+            .then(() => console.log("Service Worker Registered Successfully"))
+            .catch((err) => console.log("Service Worker Registration Failed:", err));
+    });
+}
+</script>
+
+
+
+    
+    
 </body>
 </html>
